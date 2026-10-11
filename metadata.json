@@ -1,0 +1,6 @@
+{
+  "name": "TerangaTrend – Boutique Mode, Maillots & Flocage au Sénégal",
+  "description": "Plateforme e-commerce premium au Sénégal : vêtements, maillots de football, sneakers, accessoires lifestyle et atelier de flocage personnalisé (seul ou en lot pour clubs et entreprises) avec paiement Wave et Orange Money.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,330 @@
+// Architecture Base de Données Prisma - TerangaTrend Sénégal
+// Couvre l'intégralité des modèles requis : Produits, Commandes, Paiements, Flocage & Devis
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  WORKSHOP_MANAGER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  RECEIVING_GARMENT
+  DESIGN_VALIDATED
+  FLOCAGE_IN_PROGRESS
+  QUALITY_CHECK
+  READY
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  WAVE
+  ORANGE_MONEY
+  CARD
+  CASH_ON_DELIVERY
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  phone         String?
+  passwordHash  String?
+  role          UserRole  @default(CUSTOMER)
+  addresses     Address[]
+  orders        Order[]
+  wishlist      Wishlist?
+  reviews       Review[]
+  quotes        Quote[]
+  notifications Notification[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id            String           @id @default(uuid())
+  name          String
+  slug          String           @unique
+  description   String
+  price         Int              // En FCFA (XOF)
+  oldPrice      Int?             // En FCFA (XOF)
+  stock         Int              @default(0)
+  sku           String           @unique
+  brand         String
+  badge         String?          // NEW, BESTSELLER, PROMO
+  isFeatured    Boolean          @default(false)
+  isBestSeller  Boolean          @default(false)
+  isNew         Boolean          @default(false)
+  flocageEligible Boolean        @default(false)
+  status        String           @default("ACTIVE")
+  categoryId    String
+  category      Category         @relation(fields: [categoryId], references: [id])
+  images        ProductImage[]
+  variants      ProductVariant[]
+  reviews       Review[]
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  url       String
+  alt       String
+  isPrimary Boolean @default(false)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductVariant {
+  id        String  @id @default(uuid())
+  size      String
+  color     String
+  colorHex  String
+  stock     Int     @default(10)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String?    @unique
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id              String         @id @default(uuid())
+  cartId          String
+  cart            Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId       String?
+  product         Product?       @relation(fields: [productId], references: [id])
+  customizationId String?
+  customization   Customization? @relation(fields: [customizationId], references: [id])
+  quantity        Int            @default(1)
+  selectedSize    String?
+  selectedColor   String?
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  orderNumber     String        @unique
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id])
+  customerName    String
+  customerPhone   String
+  customerEmail   String
+  status          OrderStatus   @default(PENDING)
+  isFlocageOrder  Boolean       @default(false)
+  subtotal        Int
+  deliveryFee     Int
+  discount        Int           @default(0)
+  total           Int
+  items           OrderItem[]
+  customizations  Customization[]
+  payment         Payment?
+  delivery        Delivery?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model OrderItem {
+  id            String  @id @default(uuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product @relation(fields: [productId], references: [id])
+  quantity      Int
+  unitPrice     Int
+  selectedSize  String?
+  selectedColor String?
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  orderId           String        @unique
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          PaymentMethod
+  providerReference String?       @unique
+  amount            Int
+  currency          String        @default("XOF")
+  status            PaymentStatus @default(PENDING)
+  webhookVerified   Boolean       @default(false)
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+}
+
+model Customization {
+  id           String              @id @default(uuid())
+  type         String              // SINGLE (Flocage seul) ou BULK (Flocage en lot)
+  garmentType  String              // MAILLOT, TSHIRT, AUTRE
+  fontStyle    String              // CLASSIQUE, MODERNE, FOOTBALL, AUTRE
+  textColor    String
+  position     String              // DOS, POITRINE, MANCHE, AUTRE
+  depositMode  String              // WORKSHOP_DROP (Dépôt atelier) ou PICKUP_DELIVERY (Récupération/Livraison)
+  quantity     Int
+  unitPrice    Int
+  discountPct  Int                 @default(0)
+  totalPrice   Int
+  items        CustomizationItem[]
+  logos        CustomizationLogo[]
+  cartItems    CartItem[]
+  orderId      String?
+  order        Order?              @relation(fields: [orderId], references: [id])
+  createdAt    DateTime            @default(now())
+}
+
+model CustomizationItem {
+  id              String        @id @default(uuid())
+  customizationId String
+  customization   Customization @relation(fields: [customizationId], references: [id], onDelete: Cascade)
+  playerName      String
+  playerNumber    String
+  size            String
+  color           String
+  font            String
+}
+
+model CustomizationLogo {
+  id              String        @id @default(uuid())
+  customizationId String
+  customization   Customization @relation(fields: [customizationId], references: [id], onDelete: Cascade)
+  fileUrl         String
+  position        String
+  type            String        // LOGO_EQUIPE, SPONSOR, AUTRE
+}
+
+model CustomizationPrice {
+  id                 String   @id @default(uuid())
+  namePrice          Int      @default(2000)
+  numberPrice        Int      @default(1500)
+  logoPrice          Int      @default(2000)
+  sponsorPrice       Int      @default(2500)
+  pickupFee          Int      @default(2000)
+  discount5to9       Int      @default(5)
+  discount10to19     Int      @default(10)
+  discount20to49     Int      @default(15)
+  quoteThreshold     Int      @default(50)
+  updatedAt          DateTime @updatedAt
+}
+
+model Quote {
+  id            String   @id @default(uuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  name          String
+  phone         String
+  email         String
+  quantity      Int
+  garmentType   String
+  message       String
+  logoUrl       String?
+  excelFileName String?
+  status        String   @default("PENDING") // PENDING, REVIEWED, SENT, APPROVED
+  createdAt     DateTime @default(now())
+}
+
+model Address {
+  id           String  @id @default(uuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label        String  // Domicile, Bureau, Atelier
+  street       String
+  city         String  // Dakar, Thiès, Saint-Louis, etc.
+  region       String
+  instructions String?
+  isDefault    Boolean @default(false)
+}
+
+model Wishlist {
+  id     String         @id @default(uuid())
+  userId String         @unique
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  WishlistItem[]
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  author    String
+  role      String?
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model Coupon {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  discountPct Int
+  active      Boolean  @default(true)
+  expiresAt   DateTime
+}
+
+model Delivery {
+  id           String  @id @default(uuid())
+  orderId      String  @unique
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  mode         String  // HOME_DELIVERY, WORKSHOP_PICKUP
+  street       String?
+  city         String
+  region       String
+  instructions String?
+  trackingCode String?
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   String   // WHATSAPP, SMS, EMAIL
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
