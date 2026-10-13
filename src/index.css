@@ -135,6 +135,21 @@ html.dark header.bg-white\/95 {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
+/* Light gradients (ex. hero de la page d'accueil) */
+html.dark .from-\[\#F9F9F8\],
+html.dark .from-white {
+  --tw-gradient-from: #1a1d24 !important;
+}
+
+html.dark .to-white,
+html.dark .to-\[\#F9F9F8\] {
+  --tw-gradient-to: #15181e !important;
+}
+
+html.dark .bg-orange-100 {
+  background-color: rgba(255, 90, 31, 0.15) !important;
+}
+
 /* Debossed Inset Fields (Neumorphic Inputs) */
 html.dark input[type="text"],
 html.dark input[type="number"],
@@ -155,7 +170,9 @@ html.dark textarea::placeholder {
 }
 
 /* Borders */
+html.dark .border-zinc-100,
 html.dark .border-zinc-200,
+html.dark .border-zinc-200\/60,
 html.dark .border-zinc-200\/80,
 html.dark .border-zinc-200\/90,
 html.dark .border-zinc-200\/70,
