@@ -65,6 +65,8 @@ export const FlocageHubPage: React.FC = () => {
                 <SafeImage
                   src={FLOCAGE_IMAGE_URL}
                   alt="Atelier Flocage Maillot Dakar"
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                  priority
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -83,6 +85,7 @@ export const FlocageHubPage: React.FC = () => {
                 <SafeImage
                   src={FLOCAGE_IMAGE_URL}
                   alt="Flocage seul sur votre vêtement"
+                  sizes="(min-width: 1024px) 45vw, 100vw"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -129,6 +132,7 @@ export const FlocageHubPage: React.FC = () => {
                 <SafeImage
                   src={JERSEY_IMAGE_URL}
                   alt="Flocage en lot pour clubs et équipes"
+                  sizes="(min-width: 1024px) 45vw, 100vw"
                   className="w-full h-full object-cover"
                 />
               </div>

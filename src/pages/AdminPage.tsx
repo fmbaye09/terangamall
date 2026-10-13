@@ -1332,6 +1332,8 @@ export const AdminPage: React.FC = () => {
                                 <SafeImage
                                   src={prod.images[0] || JERSEY_IMAGE_URL}
                                   alt={prod.name}
+                                  sizes="56px"
+                                  maxWidth={160}
                                   className="w-full h-full object-cover"
                                 />
                                 {prod.images.length > 1 && (

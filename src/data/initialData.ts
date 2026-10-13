@@ -11,21 +11,21 @@ import {
   TieredDiscount,
 } from '../types';
 
-export const HERO_BANNER_URL = '/src/assets/images/marketplace_hero_banner_1791237117872.jpg';
-export const SMARTPHONE_IMAGE_URL = '/src/assets/images/product_smartphone_pro_1791237127740.jpg';
-export const PHONE_BLACK_TITANIUM_IMAGE_URL = '/src/assets/images/phone_black_titanium_1791748499613.jpg';
-export const PHONE_OCEAN_BLUE_IMAGE_URL = '/src/assets/images/phone_ocean_blue_1791748484150.jpg';
-export const EARBUDS_IMAGE_URL = '/src/assets/images/product_earbuds_anc_1791237137291.jpg';
-export const SMARTWATCH_IMAGE_URL = '/src/assets/images/product_smartwatch_ultra_1791249417687.jpg';
-export const SMARTWATCH_STEALTH_BLACK_IMAGE_URL = '/src/assets/images/smartwatch_stealth_black_1791748516094.jpg';
-export const SNEAKER_BLACK_IMAGE_URL = '/src/assets/images/sneakers_all_black_1791748534181.jpg';
-export const SPEAKER_IMAGE_URL = '/src/assets/images/bluetooth_speaker_waterproof_1791748551617.jpg';
-export const AIRFRYER_IMAGE_URL = '/src/assets/images/product_airfryer_kitchen_1791237321177.jpg';
-export const HOODIE_IMAGE_URL = '/src/assets/images/product_premium_hoodie_1791068836590.jpg';
-export const SNEAKER_IMAGE_URL = '/src/assets/images/product_sneakers_air_1791068845803.jpg';
-export const HERO_IMAGE_URL = '/src/assets/images/hero_senegal_streetwear_1791068816383.jpg';
-export const FLOCAGE_IMAGE_URL = '/src/assets/images/product_custom_flocage_1791068854877.jpg';
-export const JERSEY_IMAGE_URL = '/src/assets/images/product_football_jersey_1791068826751.jpg';
+export const HERO_BANNER_URL = '/images/marketplace_hero_banner_1791237117872.jpg';
+export const SMARTPHONE_IMAGE_URL = '/images/product_smartphone_pro_1791237127740.jpg';
+export const PHONE_BLACK_TITANIUM_IMAGE_URL = '/images/phone_black_titanium_1791748499613.jpg';
+export const PHONE_OCEAN_BLUE_IMAGE_URL = '/images/phone_ocean_blue_1791748484150.jpg';
+export const EARBUDS_IMAGE_URL = '/images/product_earbuds_anc_1791237137291.jpg';
+export const SMARTWATCH_IMAGE_URL = '/images/product_smartwatch_ultra_1791249417687.jpg';
+export const SMARTWATCH_STEALTH_BLACK_IMAGE_URL = '/images/smartwatch_stealth_black_1791748516094.jpg';
+export const SNEAKER_BLACK_IMAGE_URL = '/images/sneakers_all_black_1791748534181.jpg';
+export const SPEAKER_IMAGE_URL = '/images/bluetooth_speaker_waterproof_1791748551617.jpg';
+export const AIRFRYER_IMAGE_URL = '/images/product_airfryer_kitchen_1791237321177.jpg';
+export const HOODIE_IMAGE_URL = '/images/product_premium_hoodie_1791068836590.jpg';
+export const SNEAKER_IMAGE_URL = '/images/product_sneakers_air_1791068845803.jpg';
+export const HERO_IMAGE_URL = '/images/hero_senegal_streetwear_1791068816383.jpg';
+export const FLOCAGE_IMAGE_URL = '/images/product_custom_flocage_1791068854877.jpg';
+export const JERSEY_IMAGE_URL = '/images/product_football_jersey_1791068826751.jpg';
 
 export const INITIAL_CATEGORIES: CategoryItem[] = [
   {
