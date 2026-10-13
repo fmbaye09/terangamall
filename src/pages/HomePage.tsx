@@ -40,6 +40,7 @@ export const HomePage: React.FC = () => {
 
   const visualCategories = [
     {
+      id: 'vis-phones',
       name: 'High-Tech & Téléphones',
       slug: 'electronique',
       desc: 'Smartphones 5G, écouteurs sans fil & son',
@@ -47,13 +48,15 @@ export const HomePage: React.FC = () => {
       tag: '📱 High-Tech',
     },
     {
+      id: 'vis-watches',
       name: 'Montres & Objets Connectés',
-      slug: 'sport',
+      slug: 'electronique',
       desc: 'Smartwatches AMOLED, bracelets & gadgets',
       image: SMARTWATCH_IMAGE_URL,
       tag: '⌚ Montres',
     },
     {
+      id: 'vis-cuisine',
       name: 'Maison & Cuisine',
       slug: 'maison',
       desc: 'Air Fryer sans huile & électroménager',
@@ -61,6 +64,7 @@ export const HomePage: React.FC = () => {
       tag: '🍳 Cuisine',
     },
     {
+      id: 'vis-mode',
       name: 'Mode & Sneakers',
       slug: 'mode',
       desc: 'Hoodies lourds, baskets & streetwear',
@@ -68,6 +72,7 @@ export const HomePage: React.FC = () => {
       tag: '👟 Mode',
     },
     {
+      id: 'vis-flocage',
       name: 'Atelier Flocage & Pros',
       slug: 'flocage',
       desc: 'Personnalisation t-shirts & polos d’entreprise',
@@ -181,7 +186,7 @@ export const HomePage: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
           {visualCategories.map((cat) => (
             <div
-              key={cat.slug}
+              key={cat.id}
               onClick={() => {
                 if (cat.slug === 'flocage') {
                   navigateTo('flocage');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronRight,
@@ -22,6 +22,14 @@ import { useStore } from '../context/StoreContext';
 import { formatFCFA } from '../services/payment';
 import { ProductCard } from '../components/ui/ProductCard';
 import { SafeImage } from '../components/ui/SafeImage';
+import {
+  calculateVariantSavings,
+  findMatchingVariant,
+  getAllVariantImages,
+  getVariantImage,
+  getVariantOldPrice,
+  getVariantPrice,
+} from '../types';
 
 export const ProductPage: React.FC = () => {
   const {
@@ -37,11 +45,13 @@ export const ProductPage: React.FC = () => {
   const product =
     products.find((p) => p.slug === selectedProductSlug) || products[0];
 
-  const [activeImageIdx, setActiveImageIdx] = useState(0);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'L');
-  const [selectedColor, setSelectedColor] = useState(
-    product.colors[0]?.name || 'Standard'
+  const [selectedSize, setSelectedSize] = useState(
+    product.sizes[0] || product.variants?.[0]?.size || 'Standard'
   );
+  const [selectedColor, setSelectedColor] = useState(
+    product.colors[0]?.name || product.variants?.[0]?.color || 'Standard'
+  );
+  const [userSelectedImage, setUserSelectedImage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'livraison' | 'avis'>('description');
   const [selectedShippingRegion, setSelectedShippingRegion] = useState('Dakar');
@@ -53,46 +63,99 @@ export const ProductPage: React.FC = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
 
+  // Sync state whenever the selected product changes
+  useEffect(() => {
+    setSelectedSize(product.sizes[0] || product.variants?.[0]?.size || 'Standard');
+    setSelectedColor(product.colors[0]?.name || product.variants?.[0]?.color || 'Standard');
+    setUserSelectedImage(null);
+    setQuantity(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [product.id]);
+
   const isWishlisted = wishlistIds.includes(product.id);
 
-  // Match exact variant if variants matrix exists
-  const matchedVariant = product.variants?.find(
-    (v) => v.size === selectedSize && v.color === selectedColor
+  // All photos available for this product including variants and colors
+  const galleryImages = useMemo(() => getAllVariantImages(product), [product]);
+
+  // Exact matching variant for current size and color
+  const matchedVariant = useMemo(
+    () => findMatchingVariant(product, selectedSize, selectedColor),
+    [product, selectedSize, selectedColor]
   );
 
-  const currentVariantStock = matchedVariant !== undefined ? matchedVariant.stock : product.stock;
-  const currentVariantPrice = matchedVariant ? matchedVariant.price : product.price;
+  // Synchronized price calculations
+  const currentVariantPrice = useMemo(
+    () => getVariantPrice(product, matchedVariant),
+    [product, matchedVariant]
+  );
+
+  const currentVariantOldPrice = useMemo(
+    () => getVariantOldPrice(product, matchedVariant),
+    [product, matchedVariant]
+  );
+
+  const { hasDiscount, discountPct, savingsAmount } = useMemo(
+    () => calculateVariantSavings(currentVariantPrice, currentVariantOldPrice),
+    [currentVariantPrice, currentVariantOldPrice]
+  );
+
+  const currentVariantStock =
+    matchedVariant !== undefined ? matchedVariant.stock : product.stock;
   const isOutOfStock = currentVariantStock <= 0 || product.status === 'OUT_OF_STOCK';
 
-  const unitDiscountedPrice = currentVariantPrice;
+  // Synchronized photo for the current variation
+  const variantDefaultPhoto = useMemo(
+    () => getVariantImage(product, selectedColor, matchedVariant),
+    [product, selectedColor, matchedVariant]
+  );
+
+  // Displayed image: user clicked thumbnail or the exact variation photo
+  const activeDisplayImage = userSelectedImage || variantDefaultPhoto;
+
+  const handleSelectColor = (colName: string) => {
+    setSelectedColor(colName);
+    // Immediately display the photo associated with this color/variant
+    const targetPhoto = getVariantImage(
+      product,
+      colName,
+      product.variants?.find((v) => v.color === colName && v.size === selectedSize)
+    );
+    setUserSelectedImage(targetPhoto);
+  };
+
+  const handleSelectSize = (sz: string) => {
+    setSelectedSize(sz);
+    // If the variant for this size and color has a specific photo, update to it
+    const newVariant = findMatchingVariant(product, sz, selectedColor);
+    if (newVariant?.image) {
+      setUserSelectedImage(newVariant.image);
+    }
+  };
+
+  const handleSelectThumbnail = (img: string) => {
+    setUserSelectedImage(img);
+    // If this thumbnail matches a specific color, sync selectedColor
+    const matchingCol = product.colors.find((c) => c.image === img);
+    if (matchingCol) {
+      setSelectedColor(matchingCol.name);
+      return;
+    }
+    const matchingVar = product.variants?.find((v) => v.image === img);
+    if (matchingVar && matchingVar.color) {
+      setSelectedColor(matchingVar.color);
+    }
+  };
 
   const handleOrderOnWhatsApp = () => {
     const text = encodeURIComponent(
-      `Bonjour TerangaMall ! Je souhaite commander cet article :\n\n• Produit : ${product.name}\n• Couleur : ${selectedColor}\n• Taille : ${selectedSize}\n• Quantité : ${quantity}\n• Prix : ${formatFCFA(unitDiscountedPrice * quantity)}\n\nMerci de m'indiquer comment finaliser la livraison à Dakar !`
+      `Bonjour TerangaMall ! Je souhaite commander cet article :\n\n• Produit : ${product.name}\n• Couleur : ${selectedColor}\n• Taille/Option : ${selectedSize}\n• Quantité : ${quantity}\n• Prix unitaire : ${formatFCFA(currentVariantPrice)}\n• Total : ${formatFCFA(currentVariantPrice * quantity)}\n\nMerci de m'indiquer comment finaliser la livraison à Dakar !`
     );
     window.open(`https://wa.me/221774501289?text=${text}`, '_blank', 'noopener,noreferrer');
   };
 
-  const discountPct =
-    product.oldPrice && product.oldPrice > currentVariantPrice
-      ? Math.round(((product.oldPrice - currentVariantPrice) / product.oldPrice) * 100)
-      : 0;
-
   const similarProducts = products
     .filter((p) => p.id !== product.id && p.status === 'ACTIVE')
     .slice(0, 4);
-
-  const handleSelectColor = (colName: string) => {
-    setSelectedColor(colName);
-    // Auto switch product image if this color has a mapped image or variant image
-    const colorObj = product.colors.find((c) => c.name === colName);
-    if (colorObj?.image) {
-      const idx = product.images.indexOf(colorObj.image);
-      if (idx > -1) {
-        setActiveImageIdx(idx);
-      }
-    }
-  };
 
   const handleAddToCart = () => {
     addToCartProduct(product, selectedSize, selectedColor, quantity);
@@ -161,9 +224,9 @@ export const ProductPage: React.FC = () => {
         <div className="lg:col-span-6 space-y-4 lg:sticky lg:top-24">
           <div className="relative aspect-square rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] overflow-hidden group cursor-zoom-in">
             <SafeImage
-              src={product.images[activeImageIdx] || product.images[0]}
-              alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              src={activeDisplayImage}
+              alt={`${product.name} - ${selectedColor}`}
+              className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
             />
             {discountPct > 0 && (
               <span className="absolute top-4 left-4 bg-[#FF5A1F] text-white text-xs font-bold px-3 py-1 rounded-md tabular-nums shadow-sm">
@@ -181,26 +244,38 @@ export const ProductPage: React.FC = () => {
           </div>
 
           {/* Thumbnails strip */}
-          {product.images.length > 1 && (
+          {galleryImages.length > 1 && (
             <div className="flex items-center gap-3 overflow-x-auto pb-1">
-              {product.images.map((img, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveImageIdx(idx)}
-                  className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all shrink-0 ${
-                    activeImageIdx === idx
-                      ? 'border-[#FF5A1F] scale-102 shadow-sm'
-                      : 'border-[#E5E5E5] opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <SafeImage
-                    src={img}
-                    alt={`${product.name} vue ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
+              {galleryImages.map((img, idx) => {
+                const isCurrentActive = activeDisplayImage === img;
+                const matchingCol = product.colors.find((c) => c.image === img);
+
+                return (
+                  <button
+                    key={`${img}-${idx}`}
+                    type="button"
+                    onClick={() => handleSelectThumbnail(img)}
+                    className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                      isCurrentActive
+                        ? 'border-[#FF5A1F] ring-2 ring-[#FFE8DE] scale-102 shadow-sm'
+                        : 'border-[#E5E5E5] opacity-70 hover:opacity-100 hover:border-zinc-400'
+                    }`}
+                  >
+                    <SafeImage
+                      src={img}
+                      alt={`${product.name} vue ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {matchingCol && (
+                      <span
+                        title={matchingCol.name}
+                        className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full border border-white shadow-xs"
+                        style={{ backgroundColor: matchingCol.hex }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -258,14 +333,19 @@ export const ProductPage: React.FC = () => {
 
           {/* Price & Reassurance Box */}
           <div className="bg-[#FAF9F7] rounded-2xl border border-zinc-200/90 p-5 space-y-3">
-            <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-3xl font-black text-zinc-950 tabular-nums">
-                {formatFCFA(unitDiscountedPrice)}
+                {formatFCFA(currentVariantPrice)}
               </span>
-              {product.oldPrice && product.oldPrice > product.price && (
-                <span className="text-base text-zinc-400 line-through tabular-nums">
-                  {formatFCFA(product.oldPrice)}
-                </span>
+              {hasDiscount && currentVariantOldPrice && (
+                <>
+                  <span className="text-base text-zinc-400 line-through tabular-nums font-semibold">
+                    {formatFCFA(currentVariantOldPrice)}
+                  </span>
+                  <span className="text-xs font-bold text-white bg-[#FF5A1F] px-2.5 py-0.5 rounded-full tabular-nums shadow-2xs">
+                    -{discountPct}% ({formatFCFA(savingsAmount)} d'économie)
+                  </span>
+                </>
               )}
             </div>
 
@@ -283,93 +363,110 @@ export const ProductPage: React.FC = () => {
           </div>
 
           {/* AliExpress-style Color Variants WITH Image Thumbnails */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-[#111111]">
-                Couleur : <strong className="text-[#FF5A1F]">{selectedColor}</strong>
-              </span>
-              <span className="text-[#777777]">{product.colors.length} options</span>
+          {product.colors && product.colors.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#111111]">
+                  Couleur : <strong className="text-[#FF5A1F]">{selectedColor}</strong>
+                </span>
+                <span className="text-[#777777]">{product.colors.length} options</span>
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {product.colors.map((c) => {
+                  const isSelected = selectedColor === c.name;
+                  const colPhoto = getVariantImage(product, c.name);
+
+                  return (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onClick={() => handleSelectColor(c.name)}
+                      className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-[#FF5A1F] ring-2 ring-[#FFE8DE] bg-white text-[#111111] shadow-2xs'
+                          : 'border-[#E5E5E5] bg-[#F7F7F5] text-[#111111] hover:border-[#111111]'
+                      }`}
+                    >
+                      {/* Visual thumbnail or color dot */}
+                      {colPhoto ? (
+                        <img
+                          src={colPhoto}
+                          alt={c.name}
+                          className="w-7 h-7 rounded-lg object-cover border border-[#E5E5E5] shrink-0"
+                        />
+                      ) : (
+                        <span
+                          className="w-4 h-4 rounded-full border border-black/20 shrink-0"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                      )}
+                      <span>{c.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2.5">
-              {product.colors.map((c) => {
-                const isSelected = selectedColor === c.name;
-                return (
-                  <button
-                    key={c.name}
-                    type="button"
-                    onClick={() => handleSelectColor(c.name)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                      isSelected
-                        ? 'border-[#FF5A1F] ring-2 ring-[#FFE8DE] bg-white text-[#111111]'
-                        : 'border-[#E5E5E5] bg-[#F7F7F5] text-[#111111] hover:border-[#111111]'
-                    }`}
-                  >
-                    {/* Visual thumbnail or color dot */}
-                    {c.image ? (
-                      <img
-                        src={c.image}
-                        alt={c.name}
-                        className="w-7 h-7 rounded-lg object-cover border border-[#E5E5E5]"
-                      />
-                    ) : (
-                      <span
-                        className="w-4 h-4 rounded-full border border-black/20"
-                        style={{ backgroundColor: c.hex }}
-                      />
-                    )}
-                    <span>{c.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
           {/* Size / Option Variants */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-[#111111]">
-                {product.categorySlug === 'electronique'
-                  ? 'Capacité / Stockage :'
-                  : product.categorySlug === 'maison'
-                  ? 'Capacité / Format :'
-                  : product.categorySlug === 'sport' && !product.sizes[0]?.includes('Boîtier')
-                  ? 'Pointure / Taille :'
-                  : 'Option / Taille :'} <strong className="text-[#111111]">{selectedSize}</strong>
-              </span>
-              <span className="text-[#777777]">Disponible sous 24h</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {product.sizes.map((sz) => {
-                const isSelected = selectedSize === sz;
-                // Check stock for this specific size in selected color
-                const vItem = product.variants?.find(
-                  (v) => v.size === sz && v.color === selectedColor
-                );
-                const isSzOutOfStock = vItem ? vItem.stock <= 0 : false;
+          {product.sizes && product.sizes.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#111111]">
+                  {product.categorySlug === 'electronique'
+                    ? 'Capacité / Stockage :'
+                    : product.categorySlug === 'maison'
+                    ? 'Capacité / Format :'
+                    : product.categorySlug === 'sport' && !product.sizes[0]?.includes('Boîtier')
+                    ? 'Pointure / Taille :'
+                    : 'Option / Taille :'}{' '}
+                  <strong className="text-[#111111]">{selectedSize}</strong>
+                </span>
+                <span className="text-[#777777]">Disponible sous 24h</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {product.sizes.map((sz) => {
+                  const isSelected = selectedSize === sz;
+                  const szVariant = findMatchingVariant(product, sz, selectedColor);
+                  const szStock = szVariant !== undefined ? szVariant.stock : product.stock;
+                  const isSzOutOfStock = szStock <= 0;
 
-                return (
-                  <button
-                    key={sz}
-                    type="button"
-                    disabled={isSzOutOfStock}
-                    onClick={() => setSelectedSize(sz)}
-                    className={`min-w-12 h-10 px-3.5 rounded-xl border text-xs font-bold transition-all relative ${
-                      isSelected
-                        ? 'border-[#111111] bg-[#111111] text-white shadow-xs'
-                        : isSzOutOfStock
-                        ? 'border-[#E5E5E5] bg-[#F7F7F5] text-zinc-400 line-through cursor-not-allowed'
-                        : 'border-[#E5E5E5] bg-white text-[#111111] hover:border-[#111111]'
-                    }`}
-                  >
-                    {sz}
-                    {vItem && vItem.stock > 0 && vItem.stock <= 3 && !isSelected && (
-                      <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-[#FF5A1F]" />
-                    )}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={sz}
+                      type="button"
+                      disabled={isSzOutOfStock}
+                      onClick={() => handleSelectSize(sz)}
+                      className={`min-w-14 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all relative flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                        isSelected
+                          ? 'border-[#111111] bg-[#111111] text-white shadow-xs'
+                          : isSzOutOfStock
+                          ? 'border-[#E5E5E5] bg-[#F7F7F5] text-zinc-400 line-through cursor-not-allowed opacity-50'
+                          : 'border-[#E5E5E5] bg-white text-[#111111] hover:border-[#111111]'
+                      }`}
+                    >
+                      <span>{sz}</span>
+                      {szVariant && szVariant.price !== product.price && (
+                        <span
+                          className={`text-[10px] font-semibold tabular-nums ${
+                            isSelected ? 'text-[#FFE8DE]' : 'text-zinc-500'
+                          }`}
+                        >
+                          {formatFCFA(szVariant.price)}
+                        </span>
+                      )}
+                      {szVariant && szVariant.stock > 0 && szVariant.stock <= 3 && !isSelected && (
+                        <span
+                          title={`Plus que ${szVariant.stock} en stock !`}
+                          className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#FF5A1F] ring-2 ring-white"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Quantity Selector & Action Buttons */}
           <div className="space-y-3 pt-2">
@@ -712,7 +809,7 @@ export const ProductPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             <img
-              src={product.images[activeImageIdx] || product.images[0]}
+              src={activeDisplayImage}
               alt={product.name}
               className="w-full h-auto max-h-[82vh] object-contain rounded-xl"
             />
@@ -736,7 +833,7 @@ export const ProductPage: React.FC = () => {
       <div className="lg:hidden fixed bottom-14 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#E5E5E5] px-3.5 py-2.5 flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
         <div className="min-w-0">
           <div className="text-sm font-black text-[#111111] tabular-nums truncate">
-            {formatFCFA(unitDiscountedPrice)}
+            {formatFCFA(currentVariantPrice)}
           </div>
           <div className="text-[10px] text-emerald-600 font-semibold truncate flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />

@@ -137,7 +137,7 @@ export const CartPage: React.FC = () => {
                         src={
                           isFlocage
                             ? FLOCAGE_IMAGE_URL
-                            : item.product?.images[0] || FLOCAGE_IMAGE_URL
+                            : item.selectedImage || item.product?.images[0] || FLOCAGE_IMAGE_URL
                         }
                         alt={
                           isFlocage
@@ -239,6 +239,11 @@ export const CartPage: React.FC = () => {
                       <div className="text-base font-bold text-[#111111] tabular-nums">
                         {formatFCFA(lineTotal)}
                       </div>
+                      {item.oldUnitPrice && item.oldUnitPrice > item.unitPrice && !isFlocage && (
+                        <div className="text-xs text-zinc-400 line-through tabular-nums">
+                          {formatFCFA(item.oldUnitPrice * item.quantity)}
+                        </div>
+                      )}
                       {item.quantity > 1 && !isFlocage && (
                         <div className="text-[11px] text-[#777777] tabular-nums">
                           {formatFCFA(item.unitPrice)} / unité

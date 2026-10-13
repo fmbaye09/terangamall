@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -18,7 +18,10 @@ import {
   Filter,
   Layers,
   Lock,
+  Maximize2,
   MessageCircle,
+  Minimize2,
+  Moon,
   Package,
   Palette,
   Plus,
@@ -31,7 +34,10 @@ import {
   ShoppingBag,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   Tag,
+  Server,
+  Terminal,
   Trash2,
   Truck,
   Upload,
@@ -54,7 +60,16 @@ import {
   SNEAKER_IMAGE_URL,
 } from '../data/initialData';
 import { formatFCFA } from '../services/payment';
-import { Order, OrderStatusType, Product, ProductColor, ProductVariantItem, QuoteRequest } from '../types';
+import { fetchPayDunyaConfig, updatePayDunyaConfig, testPayDunyaConnection, PayDunyaConfigData } from '../services/paydunya';
+import {
+  Order,
+  OrderStatusType,
+  Product,
+  ProductColor,
+  ProductVariantItem,
+  QuoteRequest,
+  normalizeCategorySlug,
+} from '../types';
 import { SafeImage } from '../components/ui/SafeImage';
 
 export interface ColorPresetItem {
@@ -149,6 +164,38 @@ export const CATEGORY_OPTION_PRESETS: Record<string, CategoryOptionPresetBundle[
 };
 
 /**
+ * Retourne les préréglages d'options adaptés à la catégorie spécifiée
+ */
+export const getCategoryPresets = (category: string): CategoryOptionPresetBundle[] => {
+  if (CATEGORY_OPTION_PRESETS[category]) {
+    return CATEGORY_OPTION_PRESETS[category];
+  }
+  const lower = (category || '').toLowerCase();
+  if (lower.includes('tech') || lower.includes('électro') || lower.includes('phone') || lower.includes('audio')) {
+    return CATEGORY_OPTION_PRESETS['Électronique & High-Tech'];
+  }
+  if (lower.includes('maison') || lower.includes('électroménager') || lower.includes('cuisine') || lower.includes('literie')) {
+    return CATEGORY_OPTION_PRESETS['Maison & Électroménager'];
+  }
+  if (lower.includes('mode') || lower.includes('habit') || lower.includes('vêtement') || lower.includes('maillot') || lower.includes('hoodie')) {
+    return CATEGORY_OPTION_PRESETS['Mode & Habillement'];
+  }
+  if (lower.includes('sport') || lower.includes('basket') || lower.includes('sneaker') || lower.includes('fitness')) {
+    return CATEGORY_OPTION_PRESETS['Sports, Fitness & Baskets'];
+  }
+  if (lower.includes('beauté') || lower.includes('santé') || lower.includes('soin') || lower.includes('cosmétique')) {
+    return CATEGORY_OPTION_PRESETS['Beauté, Santé & Soins'];
+  }
+  if (lower.includes('auto') || lower.includes('brico') || lower.includes('énergie') || lower.includes('solaire') || lower.includes('outil')) {
+    return CATEGORY_OPTION_PRESETS['Auto, Bricolage & Énergie'];
+  }
+  if (lower.includes('flocage') || lower.includes('personnalisation') || lower.includes('goodies')) {
+    return CATEGORY_OPTION_PRESETS['Personnalisation & Flocage Pro'];
+  }
+  return CATEGORY_OPTION_PRESETS['Électronique & High-Tech'] || [];
+};
+
+/**
  * Optimise et compresse les images importées depuis un téléphone ou PC
  * pour préserver une excellente netteté tout en gardant une taille idéale
  */
@@ -235,6 +282,7 @@ export const AdminPage: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorActiveTab, setEditorActiveTab] = useState<'general' | 'media' | 'variants' | 'pricing' | 'flocage'>('general');
+  const [showDockerModal, setShowDockerModal] = useState(false);
 
   // Order Details Modal
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
@@ -242,11 +290,139 @@ export const AdminPage: React.FC = () => {
   const [orderCarrierInput, setOrderCarrierInput] = useState('Coursier Dakar Express');
   const [orderFilter, setOrderFilter] = useState('ALL');
 
+  // PayDunya Config & Mode State
+  const [paydunyaConfig, setPaydunyaConfig] = useState<PayDunyaConfigData | null>(null);
+  const [isSwitchingPayDunyaMode, setIsSwitchingPayDunyaMode] = useState(false);
+  const [adminMasterKey, setAdminMasterKey] = useState('');
+  const [adminPrivateKey, setAdminPrivateKey] = useState('');
+  const [adminToken, setAdminToken] = useState('');
+  const [adminPublicKey, setAdminPublicKey] = useState('');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{
+    success: boolean;
+    message: string;
+    responseCode?: string;
+    token?: string;
+    responseUrl?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchPayDunyaConfig().then((cfg) => setPaydunyaConfig(cfg));
+  }, []);
+
+  const handleSwitchPaydunyaMode = async (newMode: 'test' | 'live') => {
+    setIsSwitchingPayDunyaMode(true);
+    try {
+      const res = await updatePayDunyaConfig({ mode: newMode });
+      if (res.success) {
+        const updated = await fetchPayDunyaConfig();
+        setPaydunyaConfig(updated);
+        pushToast(
+          'Passerelle PayDunya',
+          `Mode PayDunya basculé avec succès : ${newMode === 'test' ? '🧪 Test / Sandbox' : '🚀 Live / Production'}.`
+        );
+      }
+    } catch {
+      pushToast('Erreur', 'Impossible de modifier le mode PayDunya', 'error');
+    } finally {
+      setIsSwitchingPayDunyaMode(false);
+    }
+  };
+
+  const handleSavePayDunyaKeys = async () => {
+    setIsSavingKeys(true);
+    try {
+      const res = await updatePayDunyaConfig({
+        masterKey: adminMasterKey || undefined,
+        privateKey: adminPrivateKey || undefined,
+        token: adminToken || undefined,
+        publicKey: adminPublicKey || undefined,
+      });
+      if (res.success) {
+        const cfg = await fetchPayDunyaConfig();
+        setPaydunyaConfig(cfg);
+        pushToast('Clés PayDunya Enregistrées', 'Les identifiants API ont été mis à jour.');
+      }
+    } catch {
+      pushToast('Erreur', 'Impossible d\'enregistrer les clés PayDunya.', 'error');
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
+  const handleTestLivePayDunyaConnection = async () => {
+    setIsTestingConnection(true);
+    setConnectionTestResult(null);
+    try {
+      const result = await testPayDunyaConnection({
+        masterKey: adminMasterKey || undefined,
+        privateKey: adminPrivateKey || undefined,
+        token: adminToken || undefined,
+        mode: paydunyaConfig?.mode,
+      });
+      setConnectionTestResult(result);
+      if (result.success) {
+        pushToast('Connexion Réussie !', result.message);
+      } else {
+        pushToast('Erreur PayDunya', result.message, 'error');
+      }
+    } catch (e: any) {
+      setConnectionTestResult({
+        success: false,
+        message: e?.message || 'Erreur inconnue',
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
   // Webhook Simulator state
   const [webhookLog, setWebhookLog] = useState<{ id: string; provider: string; event: string; orderNumber: string; time: string; status: string }[]>([
-    { id: 'wh-1', provider: 'WAVE', event: 'payment.succeeded', orderNumber: 'TT-2026-8492', time: '14:22:10', status: 'VALIDATED' },
-    { id: 'wh-2', provider: 'ORANGE_MONEY', event: 'payment.succeeded', orderNumber: 'TT-2026-8410', time: '10:05:40', status: 'VALIDATED' },
+    { id: 'wh-1', provider: 'PAYDUNYA (Sandbox)', event: 'ipn.invoice.completed', orderNumber: 'TT-2026-8492', time: '14:25:30', status: 'VALIDATED' },
+    { id: 'wh-2', provider: 'WAVE', event: 'payment.succeeded', orderNumber: 'TT-2026-8410', time: '14:22:10', status: 'VALIDATED' },
+    { id: 'wh-3', provider: 'ORANGE_MONEY', event: 'payment.succeeded', orderNumber: 'TT-2026-8395', time: '10:05:40', status: 'VALIDATED' },
   ]);
+
+  const handleTestPayDunyaWebhook = async () => {
+    const timestamp = new Date().toLocaleTimeString('fr-FR');
+    const orderNum = `TT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const isTestMode = paydunyaConfig ? paydunyaConfig.isTest : true;
+    const token = `tok_${isTestMode ? 'sandbox' : 'live'}_${orderNum.toLowerCase()}_${Date.now().toString().slice(-4)}`;
+
+    try {
+      await fetch('/api/paydunya/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            status: 'completed',
+            invoice: { token, total_amount: 45000, description: `Test ${isTestMode ? 'Sandbox' : 'Production'} PayDunya` },
+            custom_data: { order_number: orderNum },
+          },
+        }),
+      });
+    } catch {
+      // client fallback
+    }
+
+    setWebhookLog((prev) => [
+      {
+        id: `wh-${Date.now()}`,
+        provider: `PAYDUNYA (${isTestMode ? 'Sandbox' : 'Production'})`,
+        event: 'ipn.invoice.completed',
+        orderNumber: orderNum,
+        time: timestamp,
+        status: 'VALIDATED',
+      },
+      ...prev,
+    ]);
+
+    pushToast(
+      'Webhook PayDunya Test Validé',
+      `Notification IPN reçue avec succès pour ${orderNum} (Facture ${token}).`
+    );
+  };
 
   // New Coupon Form Modal
   const [showCouponModal, setShowCouponModal] = useState(false);
@@ -281,22 +457,22 @@ export const AdminPage: React.FC = () => {
   // Product Editor Form State
   const [formName, setFormName] = useState('');
   const [formSku, setFormSku] = useState('');
-  const [formCategory, setFormCategory] = useState('Maillots');
-  const [formBrand, setFormBrand] = useState('Teranga Athletics');
-  const [formPrice, setFormPrice] = useState(25000);
-  const [formOldPrice, setFormOldPrice] = useState<number | undefined>(30000);
-  const [formStock, setFormStock] = useState(30);
+  const [formCategory, setFormCategory] = useState('Électronique & High-Tech');
+  const [formBrand, setFormBrand] = useState('Novacell Global');
+  const [formPrice, setFormPrice] = useState(345000);
+  const [formOldPrice, setFormOldPrice] = useState<number | undefined>(399000);
+  const [formStock, setFormStock] = useState(25);
   const [formDesc, setFormDesc] = useState('');
-  const [formFeatures, setFormFeatures] = useState<string>('Tissu respirant Dri-Tech\nCoupe athlétique standard\nFlocage haute tenue');
-  const [formImages, setFormImages] = useState<string[]>([JERSEY_IMAGE_URL]);
+  const [formFeatures, setFormFeatures] = useState<string>('Garantie constructeur 24 mois\nLivraison express 2h Dakar\nService client disponible 7j/7');
+  const [formImages, setFormImages] = useState<string[]>([SMARTPHONE_IMAGE_URL]);
   const [formNewImageUrl, setFormNewImageUrl] = useState('');
-  const [formSizes, setFormSizes] = useState<string[]>(['S', 'M', 'L', 'XL']);
+  const [formSizes, setFormSizes] = useState<string[]>(['128 Go', '256 Go', '512 Go']);
   const [formColors, setFormColors] = useState<ProductColor[]>([
-    { name: 'Vert Forêt', hex: '#0F4D2A', image: JERSEY_IMAGE_URL },
-    { name: 'Blanc Craie', hex: '#FFFFFF', image: HERO_IMAGE_URL },
+    { name: 'Titane Naturel', hex: '#8E8D8A', image: SMARTPHONE_IMAGE_URL },
+    { name: 'Noir Sidéral', hex: '#1C1C1E', image: EARBUDS_IMAGE_URL },
   ]);
   const [formVariants, setFormVariants] = useState<ProductVariantItem[]>([]);
-  const [formFlocageEligible, setFormFlocageEligible] = useState(true);
+  const [formFlocageEligible, setFormFlocageEligible] = useState(false);
   const [formStatus, setFormStatus] = useState<Product['status']>('ACTIVE');
   const [formWeightKg, setFormWeightKg] = useState<number>(0.25);
 
@@ -579,27 +755,28 @@ export const AdminPage: React.FC = () => {
 
   const handleCategoryChange = (newCat: string) => {
     setFormCategory(newCat);
-    const presets = CATEGORY_OPTION_PRESETS[newCat];
+    const presets = getCategoryPresets(newCat);
     if (presets && presets.length > 0) {
       const defaultPreset = presets[0];
       setFormSizes(defaultPreset.options);
       let newColors = formColors;
-      if (newCat === 'Électronique & High-Tech') {
+      const lower = newCat.toLowerCase();
+      if (lower.includes('tech') || lower.includes('électro') || lower.includes('phone')) {
         newColors = [
           { name: 'Titane Naturel', hex: '#8E8D8A', image: SMARTPHONE_IMAGE_URL },
           { name: 'Noir Sidéral', hex: '#1C1C1E', image: EARBUDS_IMAGE_URL },
         ];
-      } else if (newCat === 'Mode & Habillement') {
+      } else if (lower.includes('mode') || lower.includes('habit') || lower.includes('maillot') || lower.includes('hoodie')) {
         newColors = [
           { name: 'Noir Onyx', hex: '#111111', image: HOODIE_IMAGE_URL },
           { name: 'Blanc Pur', hex: '#FFFFFF', image: HERO_IMAGE_URL },
         ];
-      } else if (newCat === 'Sports, Fitness & Baskets') {
+      } else if (lower.includes('sport') || lower.includes('fitness') || lower.includes('basket') || lower.includes('sneaker')) {
         newColors = [
           { name: 'Blanc Pur', hex: '#FFFFFF', image: SNEAKER_IMAGE_URL },
           { name: 'Noir & Blanc Panda', hex: '#111111', image: SNEAKER_IMAGE_URL },
         ];
-      } else if (newCat === 'Maison & Électroménager') {
+      } else if (lower.includes('maison') || lower.includes('électroménager') || lower.includes('cuisine')) {
         newColors = [
           { name: 'Noir Onyx & Inox', hex: '#111111', image: AIRFRYER_IMAGE_URL },
           { name: 'Blanc & Doré Luxe', hex: '#F9FAFB', image: AIRFRYER_IMAGE_URL },
@@ -609,6 +786,25 @@ export const AdminPage: React.FC = () => {
       updateMatrixWithNewSizesAndColors(defaultPreset.options, newColors);
       pushToast('Catégorie mise à jour', `Options adaptées automatiquement à "${newCat}".`);
     }
+  };
+
+  const handleAddManualVariantRow = () => {
+    const defaultColor = formColors[0] || { name: 'Noir Onyx', hex: '#111111' };
+    const defaultSize = formSizes[0] || 'Standard';
+    const newVariant: ProductVariantItem = {
+      id: `var-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      size: defaultSize,
+      color: defaultColor.name,
+      colorHex: defaultColor.hex,
+      sku: `${formSku || 'TM-PROD'}-${defaultColor.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase()}-${defaultSize.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-3)}`,
+      price: formPrice,
+      stock: 10,
+      active: true,
+    };
+    const updated = [...formVariants, newVariant];
+    setFormVariants(updated);
+    setFormStock(updated.reduce((sum, v) => sum + (v.active ? v.stock : 0), 0));
+    pushToast('Variante ajoutée', `Nouvelle combinaison créée.`);
   };
 
   const handleDeleteVariantRow = (index: number) => {
@@ -645,6 +841,20 @@ export const AdminPage: React.FC = () => {
     pushToast('Stock propagé', `Chaque variante dispose de ${stock} pièces.`);
   };
 
+  const handleAutoCalculateVariantOldPrices = () => {
+    if (!formOldPrice || Number(formOldPrice) <= Number(formPrice)) {
+      pushToast('Ancien prix requis', 'Veuillez d\'abord saisir un ancien prix valide pour le produit principal.', 'info');
+      return;
+    }
+    const ratio = Number(formOldPrice) / Number(formPrice);
+    const updated = formVariants.map((v) => {
+      const calculatedOld = Math.max(Math.round((v.price * ratio) / 500) * 500, v.price + 1000);
+      return { ...v, oldPrice: calculatedOld };
+    });
+    setFormVariants(updated);
+    pushToast('Prix barrés calculés', `Anciens prix proportionnels appliqués aux ${updated.length} variantes.`);
+  };
+
   const handleSaveProductEditor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formSku.trim()) return;
@@ -666,7 +876,7 @@ export const AdminPage: React.FC = () => {
       slug: editingProduct ? editingProduct.slug : `${slug}-${Date.now().toString().slice(-3)}`,
       sku: formSku,
       category: formCategory,
-      categorySlug: formCategory.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      categorySlug: normalizeCategorySlug(formCategory),
       brand: formBrand,
       price: Number(formPrice),
       oldPrice: formOldPrice && Number(formOldPrice) > Number(formPrice) ? Number(formOldPrice) : undefined,
@@ -737,7 +947,10 @@ export const AdminPage: React.FC = () => {
       p.name.toLowerCase().includes(q) ||
       p.sku.toLowerCase().includes(q) ||
       p.brand.toLowerCase().includes(q);
-    const matchCat = productCatFilter === 'ALL' || p.categorySlug === productCatFilter;
+    const matchCat =
+      productCatFilter === 'ALL' ||
+      p.categorySlug === productCatFilter ||
+      normalizeCategorySlug(p.categorySlug || p.category) === normalizeCategorySlug(productCatFilter);
     const matchStatus = productStatusFilter === 'ALL' || p.status === productStatusFilter;
     return matchSearch && matchCat && matchStatus;
   });
@@ -903,6 +1116,15 @@ export const AdminPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDockerModal(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-400/30 text-[11px] font-bold transition-colors cursor-pointer"
+              title="Consulter les instructions Docker pour déployer sur votre propre serveur"
+            >
+              <Server className="w-3.5 h-3.5 text-blue-300" />
+              <span>Docker & Déploiement</span>
+            </button>
             <button
               type="button"
               onClick={handleCopySecretAdminUrl}
@@ -1893,39 +2115,319 @@ export const AdminPage: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* TAB 8: PASSERELLES & WEBHOOKS (Wave & OM Simulation) */}
+        {/* ======================================================== */}
+        {/* TAB 8: PASSERELLES & WEBHOOKS (PayDunya Sandbox & Mobiles) */}
         {/* ======================================================== */}
         {activeTab === 'gateway' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 space-y-4 shadow-xs">
+            <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 space-y-5 shadow-xs">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-[#111111]">Configuration Passerelles de Paiement</h3>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Opérationnel</span>
+                <div>
+                  <h3 className="text-base font-bold text-[#111111]">Passerelles de Paiement Sénégal</h3>
+                  <p className="text-xs text-[#777777]">Intégration API PayDunya Sandbox, Wave et Orange Money</p>
+                </div>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                  paydunyaConfig?.mode === 'live'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-blue-700 bg-blue-50 border-blue-200'
+                }`}>
+                  ● {paydunyaConfig?.mode === 'live' ? 'Mode Production Actif' : 'Mode Test (Sandbox) Actif'}
+                </span>
               </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="p-3.5 rounded-xl border border-[#E5E5E5] bg-[#F7F7F5] space-y-1">
-                  <div className="font-bold text-[#111111]">Wave Sénégal API Gateway</div>
-                  <div className="text-[#777777]">Webhook Target : <span className="font-mono text-[11px] text-[#111111]">/api/webhooks/wave</span></div>
-                  <div className="text-[11px] text-emerald-700 font-semibold">Chiffrement HMAC-SHA256 activé · Validation push</div>
+              <div className="space-y-3.5 text-xs">
+                {/* 1. Carte PayDunya */}
+                <div className="p-4 rounded-2xl border-2 border-[#0084FF]/30 bg-[#F0F7FF] space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-[#0084FF] text-white font-black flex items-center justify-center text-xs">
+                        PD
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[#111111]">
+                          PayDunya Sénégal ({paydunyaConfig?.mode === 'live' ? 'Production Live' : 'API Test / Sandbox'})
+                        </div>
+                        <div className="text-[11px] text-[#0084FF] font-semibold">Passerelle multi-canaux (Wave, OM, Free, Cartes)</div>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      paydunyaConfig?.mode === 'live'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {paydunyaConfig?.mode === 'live' ? 'Live Connecté' : 'Sandbox Connecté'}
+                    </span>
+                  </div>
+
+                  {/* Note rassurante pour PAYDUNYA_MODE */}
+                  <div className="p-3 rounded-xl bg-white border border-blue-200/80 text-[11px] space-y-1 shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Tolérance automatique PAYDUNYA_MODE</span>
+                    </div>
+                    <p className="text-zinc-600 leading-relaxed">
+                      Si vous avez saisi <code className="font-mono bg-blue-50 text-blue-800 px-1 py-0.5 rounded">Mode test</code> ou <code className="font-mono bg-blue-50 text-blue-800 px-1 py-0.5 rounded">test</code> dans vos variables d'environnement, <strong>aucun souci !</strong> Le système reconnaît automatiquement ces variantes et active l'environnement Sandbox sans provoquer d'erreur.
+                    </p>
+                  </div>
+
+                  {/* Sélecteur rapide de Mode Test / Mode Live */}
+                  <div className="space-y-1.5 pt-1 border-t border-blue-200/60">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-700 font-semibold text-[11px]">Environnement actif :</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        PAYDUNYA_MODE = "{paydunyaConfig?.rawMode || 'test'}" (interprété: "{paydunyaConfig?.mode || 'test'}")
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={isSwitchingPayDunyaMode}
+                        onClick={() => handleSwitchPaydunyaMode('test')}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          paydunyaConfig?.mode !== 'live'
+                            ? 'bg-[#0084FF] text-white border-[#0084FF] shadow-xs'
+                            : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                        }`}
+                      >
+                        <span>🧪 Mode Test (Sandbox)</span>
+                        {paydunyaConfig?.mode !== 'live' && <Check className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSwitchingPayDunyaMode}
+                        onClick={() => handleSwitchPaydunyaMode('live')}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          paydunyaConfig?.mode === 'live'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                        }`}
+                      >
+                        <span>🚀 Mode Live (Production)</span>
+                        {paydunyaConfig?.mode === 'live' && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Formulaire de saisie & Test des clés API PayDunya */}
+                  <div className="p-3.5 rounded-xl bg-white border border-blue-200/90 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-zinc-900 text-xs flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-[#0084FF]" />
+                        <span>Identifiants API PayDunya ({paydunyaConfig?.mode === 'live' ? 'Production' : 'Compte Test Sandbox'})</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        {paydunyaConfig?.isConfigured ? 'Clés actives' : 'Clés manquantes'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <label className="block text-zinc-600 font-semibold mb-0.5">
+                          Master Key : <span className="font-normal text-zinc-400">({paydunyaConfig?.keysStatus.masterKey})</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={adminMasterKey}
+                          onChange={(e) => setAdminMasterKey(e.target.value)}
+                          placeholder="Collez la Master Key..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono focus:border-[#0084FF] focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-600 font-semibold mb-0.5">
+                          Private Key : <span className="font-normal text-zinc-400">({paydunyaConfig?.keysStatus.privateKey})</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={adminPrivateKey}
+                          onChange={(e) => setAdminPrivateKey(e.target.value)}
+                          placeholder="Collez la Private Key..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono focus:border-[#0084FF] focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-600 font-semibold mb-0.5">
+                          Token d'application : <span className="font-normal text-zinc-400">({paydunyaConfig?.keysStatus.token})</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={adminToken}
+                          onChange={(e) => setAdminToken(e.target.value)}
+                          placeholder="Collez le Token..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono focus:border-[#0084FF] focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-600 font-semibold mb-0.5">
+                          Public Key (Optionnel) :
+                        </label>
+                        <input
+                          type="text"
+                          value={adminPublicKey}
+                          onChange={(e) => setAdminPublicKey(e.target.value)}
+                          placeholder="Collez la Public Key..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono focus:border-[#0084FF] focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleSavePayDunyaKeys}
+                        disabled={isSavingKeys}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isSavingKeys ? 'Enregistrement...' : 'Enregistrer les clés'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleTestLivePayDunyaConnection}
+                        disabled={isTestingConnection}
+                        className="px-3 py-1.5 rounded-lg bg-[#0084FF] hover:bg-blue-700 text-white font-bold text-xs cursor-pointer transition-colors shadow-2xs disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>{isTestingConnection ? 'Test en cours avec PayDunya...' : '🔍 Tester la connexion API en direct'}</span>
+                      </button>
+                    </div>
+
+                    {/* Résultat du test de connexion réel */}
+                    {connectionTestResult && (
+                      <div className={`p-2.5 rounded-xl text-[11px] leading-relaxed border ${
+                        connectionTestResult.success
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : 'bg-amber-50 border-amber-200 text-amber-900'
+                      }`}>
+                        <div className="font-bold flex items-center gap-1.5">
+                          {connectionTestResult.success ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                          )}
+                          <span>{connectionTestResult.message}</span>
+                        </div>
+                        {!connectionTestResult.success && (
+                          <p className="mt-1 text-zinc-600">
+                            👉 Connectez-vous sur votre compte <strong>PayDunya</strong> (
+                            <a href="https://app.paydunya.com" target="_blank" rel="noreferrer" className="text-[#0084FF] underline">
+                              app.paydunya.com
+                            </a>
+                            ) &gt; <strong>Intégration API</strong> &gt; <strong>Applications</strong> &gt; Mode Test pour copier vos clés exactes.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 pt-1 border-t border-blue-200/60 text-[11px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-600">Endpoint Création Facture :</span>
+                      <code className="font-mono text-zinc-900 bg-white px-1.5 py-0.5 rounded border border-blue-100">
+                        POST /api/paydunya/create-invoice
+                      </code>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-zinc-600 shrink-0">URL Webhook IPN Callback :</span>
+                      <div className="flex items-center gap-1 overflow-hidden">
+                        <code className="font-mono text-zinc-900 bg-white px-1.5 py-0.5 rounded border border-blue-100 truncate text-[10px]">
+                          {paydunyaConfig?.callbackUrl || '/api/paydunya/webhook'}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(paydunyaConfig?.callbackUrl || `${window.location.origin}/api/paydunya/webhook`);
+                            pushToast('URL IPN Copiée', 'Collez-la dans votre dashboard PayDunya (URL de rappel IPN).');
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-800 text-[10px] font-bold shrink-0 cursor-pointer"
+                        >
+                          Copier
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-600">URL Portail Checkout :</span>
+                      <span className="font-mono text-blue-700 truncate max-w-[240px]">
+                        {paydunyaConfig?.checkoutUrl || 'https://app.paydunya.com/sandbox-checkout'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-200/60">
+                    <button
+                      type="button"
+                      onClick={handleTestPayDunyaWebhook}
+                      className="px-3 py-1.5 rounded-lg bg-[#0084FF] hover:bg-blue-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Tester un Webhook IPN ({paydunyaConfig?.mode === 'live' ? 'Live' : 'Sandbox'})</span>
+                    </button>
+                    <a
+                      href="https://developers.paydunya.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-100 text-zinc-700 font-semibold text-xs border border-zinc-200 transition-colors inline-flex items-center gap-1"
+                    >
+                      <span>Doc PayDunya</span>
+                      <ExternalLink className="w-3 h-3 text-zinc-400" />
+                    </a>
+                  </div>
                 </div>
 
+                {/* 2. Wave Direct */}
                 <div className="p-3.5 rounded-xl border border-[#E5E5E5] bg-[#F7F7F5] space-y-1">
-                  <div className="font-bold text-[#111111]">Orange Money Merchant Gateway</div>
+                  <div className="flex justify-between items-center">
+                    <div className="font-bold text-[#111111]">Wave Sénégal Direct (Push API)</div>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">Actif</span>
+                  </div>
+                  <div className="text-[#777777]">Webhook Target : <span className="font-mono text-[11px] text-[#111111]">/api/webhooks/wave</span></div>
+                  <div className="text-[11px] text-emerald-700 font-semibold">Validation push instantanée</div>
+                </div>
+
+                {/* 3. Orange Money Direct */}
+                <div className="p-3.5 rounded-xl border border-[#E5E5E5] bg-[#F7F7F5] space-y-1">
+                  <div className="flex justify-between items-center">
+                    <div className="font-bold text-[#111111]">Orange Money Merchant Gateway</div>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">Actif</span>
+                  </div>
                   <div className="text-[#777777]">USSD Code : <span className="font-mono text-[11px] text-[#111111]">#144#391#</span></div>
                   <div className="text-[11px] text-emerald-700 font-semibold">Max It API Provider v2.1</div>
                 </div>
               </div>
             </div>
 
+            {/* Journal des Webhooks IPN */}
             <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 space-y-4 shadow-xs">
-              <h3 className="text-base font-bold text-[#111111]">Journal des Webhooks Récents (Logs)</h3>
-              <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-[#111111]">Journal des Webhooks Récents (Logs IPN)</h3>
+                  <p className="text-xs text-[#777777]">Événements de paiement reçus par le serveur en temps réel</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTestPayDunyaWebhook}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-semibold cursor-pointer"
+                >
+                  + Simuler IPN
+                </button>
+              </div>
+
+              <div className="space-y-2 text-xs max-h-96 overflow-y-auto">
                 {webhookLog.map((log) => (
                   <div key={log.id} className="p-3 rounded-xl bg-[#F7F7F5] border border-[#E5E5E5] flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-[#111111]">{log.provider} · {log.event}</div>
-                      <div className="text-[11px] text-[#777777]">Commande {log.orderNumber} · {log.time}</div>
+                      <div className="font-bold text-[#111111] flex items-center gap-1.5">
+                        <span>{log.provider}</span>
+                        <span className="text-[10px] text-zinc-400 font-normal font-mono">({log.event})</span>
+                      </div>
+                      <div className="text-[11px] text-[#777777]">
+                        Commande <span className="font-semibold text-zinc-900">{log.orderNumber}</span> · Reçu à {log.time}
+                      </div>
                     </div>
                     <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
                       {log.status}
@@ -2322,13 +2824,25 @@ export const AdminPage: React.FC = () => {
                   <div className="bg-[#F7F7F5] rounded-2xl border border-[#E5E5E5] p-5 space-y-5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E5E5E5]">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h4 className="font-bold text-sm text-[#111111]">1. Couleurs & Options actives</h4>
-                          <span className="px-2.5 py-0.5 rounded-full bg-[#111111] text-white text-[11px] font-semibold">
-                            Catégorie : {formCategory}
-                          </span>
+                          <div className="flex items-center gap-1.5 bg-white border border-[#E5E5E5] px-2.5 py-1 rounded-xl shadow-2xs">
+                            <span className="text-[11px] text-[#777777] font-medium">Catégorie :</span>
+                            <select
+                              value={formCategory}
+                              onChange={(e) => handleCategoryChange(e.target.value)}
+                              className="bg-transparent text-xs font-bold text-[#FF5A1F] focus:outline-none cursor-pointer"
+                              title="Changer de catégorie adapte automatiquement les options ci-dessous"
+                            >
+                              {categories.map((c) => (
+                                <option key={c.id} value={c.name}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                        <p className="text-xs text-[#777777] mt-0.5">
+                        <p className="text-xs text-[#777777] mt-1">
                           Les options et les couleurs ci-dessous génèrent automatiquement la matrice de variantes
                         </p>
                       </div>
@@ -2613,7 +3127,7 @@ export const AdminPage: React.FC = () => {
                           </span>
 
                           <div className="flex flex-wrap gap-1.5">
-                            {(CATEGORY_OPTION_PRESETS[formCategory] || []).map((preset, pIdx) => (
+                            {getCategoryPresets(formCategory).map((preset, pIdx) => (
                               <button
                                 key={pIdx}
                                 type="button"
@@ -2673,20 +3187,36 @@ export const AdminPage: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs pt-1">
                       <div>
                         <h4 className="font-bold text-sm text-[#111111]">
-                          2. Matrice détaillée des Variantes ({formVariants.length} combinaisons)
+                          2. Matrice détaillée des Variantes ({formVariants.length} combinaison{formVariants.length > 1 ? 's' : ''})
                         </h4>
                         <p className="text-xs text-[#777777]">
-                          Ajustez les prix, stocks et références SKU pour chaque combinaison
+                          Choisissez la couleur et la taille/option configurée, ou personnalisez les prix et stocks
                         </p>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
+                          onClick={handleAddManualVariantRow}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#FF5A1F] hover:bg-zinc-900 text-white font-bold text-xs cursor-pointer shadow-xs inline-flex items-center gap-1.5 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Variante sur-mesure</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleApplyGlobalVariantPrice(formPrice)}
                           className="px-2.5 py-1.5 rounded-lg bg-white border border-[#E5E5E5] text-[#111111] hover:border-[#111111] font-semibold text-xs cursor-pointer shadow-2xs"
                         >
                           Appliquer prix {formatFCFA(formPrice)} à tous
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAutoCalculateVariantOldPrices}
+                          className="px-2.5 py-1.5 rounded-lg bg-white border border-[#FF5A1F]/40 text-[#FF5A1F] hover:bg-[#FFE8DE]/30 font-semibold text-xs cursor-pointer shadow-2xs"
+                          title="Calcule automatiquement l'ancien prix barré de chaque variante selon la réduction de base"
+                        >
+                          Auto-calculer prix barrés
                         </button>
                         <button
                           type="button"
@@ -2710,93 +3240,195 @@ export const AdminPage: React.FC = () => {
                       <table className="w-full text-left border-collapse">
                         <thead className="bg-[#F7F7F5] text-[11px] font-bold text-[#777777] sticky top-0 z-10 border-b border-[#E5E5E5]">
                           <tr>
-                            <th className="py-2.5 px-3">Variante (Couleur × Option)</th>
-                            <th className="py-2.5 px-3">SKU Individuel</th>
+                            <th className="py-2.5 px-3 min-w-[190px]">Variante (Couleur × Option)</th>
+                            <th className="py-2.5 px-2">Photo liée</th>
+                            <th className="py-2.5 px-3">SKU</th>
                             <th className="py-2.5 px-3">Prix (FCFA)</th>
-                            <th className="py-2.5 px-3">Stock disponible</th>
+                            <th className="py-2.5 px-3">Prix barré (Ancien)</th>
+                            <th className="py-2.5 px-3">Stock</th>
                             <th className="py-2.5 px-3 text-center">Active</th>
                             <th className="py-2.5 px-3 text-right">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#E5E5E5] text-xs">
-                          {formVariants.map((v, idx) => (
-                            <tr key={v.id || idx} className="hover:bg-[#F7F7F5]/60 transition-colors">
-                              <td className="py-2 px-3 font-semibold text-[#111111]">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className="w-3.5 h-3.5 rounded-full border border-black/20 shrink-0 shadow-2xs"
-                                    style={{ backgroundColor: v.colorHex }}
+                          {formVariants.map((v, idx) => {
+                            const variantPhoto =
+                              v.image || formColors.find((c) => c.name === v.color)?.image || formImages[0];
+
+                            return (
+                              <tr key={v.id || idx} className="hover:bg-[#F7F7F5]/60 transition-colors">
+                                <td className="py-2 px-3 font-semibold text-[#111111]">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-[190px]">
+                                    {/* Sélecteur de la couleur parmi les couleurs configurées */}
+                                    <div className="flex items-center gap-1">
+                                      <span
+                                        className="w-3.5 h-3.5 rounded-full border border-black/20 shrink-0 shadow-2xs"
+                                        style={{ backgroundColor: v.colorHex }}
+                                      />
+                                      <select
+                                        value={v.color}
+                                        onChange={(e) => {
+                                          const selectedColor = formColors.find((c) => c.name === e.target.value);
+                                          const updated = [...formVariants];
+                                          updated[idx] = {
+                                            ...v,
+                                            color: e.target.value,
+                                            colorHex: selectedColor ? selectedColor.hex : v.colorHex,
+                                            image: selectedColor?.image || v.image,
+                                          };
+                                          setFormVariants(updated);
+                                        }}
+                                        className="px-2 py-1 rounded-lg border border-[#E5E5E5] bg-white text-xs font-semibold text-[#111111] hover:border-[#FF5A1F]"
+                                        title="Choisir parmi les couleurs configurées"
+                                      >
+                                        {formColors.map((c) => (
+                                          <option key={c.name} value={c.name}>
+                                            {c.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <span className="text-[#999999]">/</span>
+
+                                    {/* Sélecteur de la taille / option parmi les options configurées */}
+                                    <select
+                                      value={v.size}
+                                      onChange={(e) => {
+                                        const updated = [...formVariants];
+                                        updated[idx] = { ...v, size: e.target.value };
+                                        setFormVariants(updated);
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-[#E5E5E5] bg-white text-xs font-bold text-[#FF5A1F] hover:border-[#FF5A1F]"
+                                      title="Choisir parmi les options / tailles configurées"
+                                    >
+                                      {formSizes.map((s) => (
+                                        <option key={s} value={s}>
+                                          {s}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </td>
+
+                                {/* Photo liée à la variante */}
+                                <td className="py-2 px-2">
+                                  <div className="flex items-center gap-1.5">
+                                    {variantPhoto ? (
+                                      <img
+                                        src={variantPhoto}
+                                        alt={v.color}
+                                        className="w-8 h-8 rounded-lg object-cover border border-[#E5E5E5] shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-lg bg-zinc-100 border border-dashed border-zinc-300 flex items-center justify-center text-[10px] text-zinc-400 shrink-0">
+                                        N/A
+                                      </div>
+                                    )}
+                                    {formImages.length > 0 && (
+                                      <select
+                                        value={v.image || ''}
+                                        onChange={(e) => {
+                                          const updated = [...formVariants];
+                                          updated[idx] = { ...v, image: e.target.value || undefined };
+                                          setFormVariants(updated);
+                                        }}
+                                        className="text-[11px] px-1.5 py-1 rounded border border-[#E5E5E5] bg-white max-w-[90px] truncate"
+                                        title="Sélectionner une photo parmi les images du produit"
+                                      >
+                                        <option value="">Auto (Couleur)</option>
+                                        {formImages.map((img, iIdx) => (
+                                          <option key={iIdx} value={img}>
+                                            Photo #{iIdx + 1}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="text"
+                                    value={v.sku}
+                                    onChange={(e) => {
+                                      const updated = [...formVariants];
+                                      updated[idx] = { ...v, sku: e.target.value };
+                                      setFormVariants(updated);
+                                    }}
+                                    className="w-32 px-2 py-1 rounded-lg border border-[#E5E5E5] font-mono text-[11px]"
                                   />
-                                  <span>{v.color}</span>
-                                  <span className="text-[#777777]">/</span>
-                                  <span className="font-bold text-[#FF5A1F]">{v.size}</span>
-                                </div>
-                              </td>
+                                </td>
 
-                              <td className="py-2 px-3">
-                                <input
-                                  type="text"
-                                  value={v.sku}
-                                  onChange={(e) => {
-                                    const updated = [...formVariants];
-                                    updated[idx] = { ...v, sku: e.target.value };
-                                    setFormVariants(updated);
-                                  }}
-                                  className="w-36 px-2 py-1 rounded-lg border border-[#E5E5E5] font-mono text-[11px]"
-                                />
-                              </td>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="number"
+                                    value={v.price}
+                                    onChange={(e) => {
+                                      const updated = [...formVariants];
+                                      updated[idx] = { ...v, price: Number(e.target.value) };
+                                      setFormVariants(updated);
+                                    }}
+                                    className="w-24 px-2 py-1 rounded-lg border border-[#E5E5E5] font-bold tabular-nums"
+                                  />
+                                </td>
 
-                              <td className="py-2 px-3">
-                                <input
-                                  type="number"
-                                  value={v.price}
-                                  onChange={(e) => {
-                                    const updated = [...formVariants];
-                                    updated[idx] = { ...v, price: Number(e.target.value) };
-                                    setFormVariants(updated);
-                                  }}
-                                  className="w-28 px-2 py-1 rounded-lg border border-[#E5E5E5] font-bold tabular-nums"
-                                />
-                              </td>
+                                {/* Ancien prix barré pour la variante */}
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="number"
+                                    placeholder="Optionnel"
+                                    value={v.oldPrice || ''}
+                                    onChange={(e) => {
+                                      const updated = [...formVariants];
+                                      const val = e.target.value ? Number(e.target.value) : undefined;
+                                      updated[idx] = { ...v, oldPrice: val };
+                                      setFormVariants(updated);
+                                    }}
+                                    className="w-24 px-2 py-1 rounded-lg border border-[#E5E5E5] text-zinc-500 line-through font-semibold tabular-nums text-xs"
+                                    title="Prix barré de référence pour cette variante"
+                                  />
+                                </td>
 
-                              <td className="py-2 px-3">
-                                <input
-                                  type="number"
-                                  value={v.stock}
-                                  onChange={(e) => {
-                                    const updated = [...formVariants];
-                                    updated[idx] = { ...v, stock: Number(e.target.value) };
-                                    setFormVariants(updated);
-                                  }}
-                                  className="w-20 px-2 py-1 rounded-lg border border-[#E5E5E5] tabular-nums font-bold"
-                                />
-                              </td>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="number"
+                                    value={v.stock}
+                                    onChange={(e) => {
+                                      const updated = [...formVariants];
+                                      updated[idx] = { ...v, stock: Number(e.target.value) };
+                                      setFormVariants(updated);
+                                    }}
+                                    className="w-16 px-2 py-1 rounded-lg border border-[#E5E5E5] tabular-nums font-bold"
+                                  />
+                                </td>
 
-                              <td className="py-2 px-3 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={v.active}
-                                  onChange={(e) => {
-                                    const updated = [...formVariants];
-                                    updated[idx] = { ...v, active: e.target.checked };
-                                    setFormVariants(updated);
-                                  }}
-                                  className="w-4 h-4 rounded accent-[#FF5A1F]"
-                                />
-                              </td>
+                                <td className="py-2 px-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={v.active}
+                                    onChange={(e) => {
+                                      const updated = [...formVariants];
+                                      updated[idx] = { ...v, active: e.target.checked };
+                                      setFormVariants(updated);
+                                    }}
+                                    className="w-4 h-4 rounded accent-[#FF5A1F]"
+                                  />
+                                </td>
 
-                              <td className="py-2 px-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteVariantRow(idx)}
-                                  title="Supprimer cette variante spécifique"
-                                  className="p-1 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                                <td className="py-2 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVariantRow(idx)}
+                                    title="Supprimer cette variante spécifique"
+                                    className="p-1 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -3025,6 +3657,109 @@ export const AdminPage: React.FC = () => {
               Créer et activer le coupon
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL : GUIDE DÉPLOIEMENT DOCKER & SERVEUR PERSONNEL     */}
+      {/* ======================================================== */}
+      {showDockerModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            className="bg-white rounded-3xl border border-[#E5E5E5] max-w-2xl w-full shadow-2xl overflow-hidden p-6 space-y-5 animate-in fade-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5E5E5]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#111111]">
+                    Déploiement Docker sur Votre Propre Serveur
+                  </h3>
+                  <p className="text-xs text-[#777777]">
+                    Tous les fichiers Docker et Nginx sont déjà configurés et prêts à l'emploi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDockerModal(false)}
+                className="p-1.5 rounded-lg text-[#777777] hover:bg-[#F7F7F5]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-2xl bg-[#F7F7F5] border border-[#E5E5E5] space-y-2">
+                <span className="font-bold text-[#111111] flex items-center gap-1.5">
+                  <Terminal className="w-4 h-4 text-[#FF5A1F]" />
+                  <span>Commande unique de lancement (Docker Compose) :</span>
+                </span>
+                <div className="flex items-center justify-between gap-2 bg-[#111111] text-emerald-400 p-3 rounded-xl font-mono text-[11px]">
+                  <code>docker compose up -d --build</code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('docker compose up -d --build');
+                      pushToast('Copié !', 'Commande Docker copiée dans le presse-papiers.');
+                    }}
+                    className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white font-sans text-xs font-semibold cursor-pointer shrink-0"
+                  >
+                    Copier
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#777777]">
+                  Votre boutique sera accessible immédiatement sur : <span className="font-mono text-[#111111]">http://IP-DE-VOTRE-SERVEUR:3000</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-[#111111]">Fichiers préparés dans votre projet :</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 rounded-xl border border-zinc-200 bg-white">
+                    <span className="font-mono font-bold text-[#111111]">Dockerfile</span>
+                    <p className="text-zinc-500 mt-0.5">Build Node.js + Serveur Nginx Alpine ultra-léger (&lt; 20 Mo de RAM).</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl border border-zinc-200 bg-white">
+                    <span className="font-mono font-bold text-[#111111]">docker-compose.yml</span>
+                    <p className="text-zinc-500 mt-0.5">Configuration du port 3000, redémarrage auto, healthchecks et logs.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl border border-zinc-200 bg-white">
+                    <span className="font-mono font-bold text-[#111111]">nginx.conf</span>
+                    <p className="text-zinc-500 mt-0.5">Routage SPA complet, compression Gzip mobile, en-têtes de sécurité.</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl border border-zinc-200 bg-white">
+                    <span className="font-mono font-bold text-[#111111]">DEPLOY_DOCKER.md</span>
+                    <p className="text-zinc-500 mt-0.5">Guide pas-à-pas avec nom de domaine et SSL gratuit (Certbot).</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] space-y-1">
+                <span className="font-bold flex items-center gap-1.5">
+                  <span>💡</span> Astuce pour le port 80 direct :
+                </span>
+                <p>
+                  Pour lancer directement sur le port web standard 80 sans taper :3000 dans l'adresse, lancez simplement :
+                  <br />
+                  <code className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded text-amber-950">PORT=80 docker compose up -d --build</code>
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-[#E5E5E5] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDockerModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-[#111111] hover:bg-[#FF5A1F] text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

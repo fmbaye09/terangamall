@@ -51,7 +51,9 @@ class SenegalUnifiedPaymentService implements IPaymentProvider {
   async createPayment(req: PaymentCreationRequest): Promise<PaymentCreationResult> {
     const timestamp = Date.now();
     const prefix =
-      req.method === 'WAVE'
+      req.method === 'PAYDUNYA'
+        ? 'PD-SN'
+        : req.method === 'WAVE'
         ? 'WV-SN'
         : req.method === 'ORANGE_MONEY'
         ? 'OM-SN'
@@ -63,6 +65,7 @@ class SenegalUnifiedPaymentService implements IPaymentProvider {
     const webhookSignature = `whsec_sn_${btoa(`${req.orderId}:${providerReference}:${req.amount}`)}`;
 
     const instructionMap: Record<PaymentMethodType, string> = {
+      PAYDUNYA: `Session PayDunya Sandbox initialisée. Redirection vers la passerelle sécurisée (Wave, Orange Money, Carte, Free Money).`,
       WAVE: `Notification push envoyée sur le compte Wave ${req.customerPhone}. Validation webhook serveur requise.`,
       ORANGE_MONEY: `Code USSD #144#391# initié pour ${req.customerPhone}. En attente de confirmation webhook Orange Money.`,
       CARD: `Transaction 3D Secure initialisée (${req.amount.toLocaleString('fr-FR')} FCFA).`,

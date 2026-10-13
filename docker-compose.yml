@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  terangamall:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: terangamall-app
+    restart: unless-stopped
+    ports:
+      # Port par défaut 3000 accessible via http://votre-serveur:3000
+      # Modifiable via variable d'environnement PORT (ex: PORT=80)
+      - "${PORT:-3000}:80"
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

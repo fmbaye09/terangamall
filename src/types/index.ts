@@ -11,7 +11,7 @@ export type RouteView =
   | 'order-tracking'
   | 'admin';
 
-export type PaymentMethodType = 'WAVE' | 'ORANGE_MONEY' | 'CARD' | 'CASH_ON_DELIVERY';
+export type PaymentMethodType = 'WAVE' | 'ORANGE_MONEY' | 'CARD' | 'CASH_ON_DELIVERY' | 'PAYDUNYA';
 
 export type PaymentStatusType =
   | 'PENDING'
@@ -176,9 +176,12 @@ export interface CartItem {
   product?: Product;
   selectedSize?: string;
   selectedColor?: string;
+  selectedImage?: string;
+  selectedSku?: string;
   flocageConfig?: FlocageConfiguration;
   quantity: number;
   unitPrice: number;
+  oldUnitPrice?: number;
   savedForLater?: boolean;
 }
 
@@ -212,6 +215,8 @@ export interface Order {
   paymentMethod: PaymentMethodType;
   paymentStatus: PaymentStatusType;
   paymentReference: string;
+  paydunyaToken?: string;
+  paydunyaReceiptUrl?: string;
   webhookConfirmedAt?: string;
   orderStatus: OrderStatusType;
   isFlocageOrder: boolean;
@@ -259,3 +264,48 @@ export interface QuoteRequest {
   status: 'EN_ATTENTE' | 'ETUDE_EN_COURS' | 'DEVIS_ENVOYE' | 'VALIDE';
   createdAt: string;
 }
+
+/**
+ * Normalise les catégories et slugs pour garantir que les filtres
+ * fonctionnent parfaitement avec ou sans accents, majuscules et variantes d'écriture.
+ */
+export function normalizeCategorySlug(val?: string): string {
+  if (!val || val === 'all') return 'all';
+  const clean = val
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  if (
+    clean.includes('electr') ||
+    clean.includes('tech') ||
+    clean.includes('phone') ||
+    clean.includes('audio') ||
+    clean.includes('watch') ||
+    clean.includes('gadget')
+  ) {
+    return 'electronique';
+  }
+  if (clean.includes('maison') || clean.includes('electrom') || clean.includes('cuisin')) {
+    return 'maison';
+  }
+  if (clean.includes('mode') || clean.includes('habit') || clean.includes('vetement') || clean.includes('textile')) {
+    return 'mode';
+  }
+  if (clean.includes('sport') || clean.includes('fit') || clean.includes('basket') || clean.includes('sneaker')) {
+    return 'sport';
+  }
+  if (clean.includes('beaut') || clean.includes('sant') || clean.includes('soin')) {
+    return 'beaute';
+  }
+  if (clean.includes('auto') || clean.includes('brico') || clean.includes('energ') || clean.includes('solair')) {
+    return 'auto';
+  }
+  if (clean.includes('floc') || clean.includes('personnalis')) {
+    return 'flocage';
+  }
+  return clean.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+export * from '../utils/variantHelpers';

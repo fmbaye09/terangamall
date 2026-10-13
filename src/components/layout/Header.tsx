@@ -4,10 +4,12 @@ import {
   LayoutGrid,
   Menu,
   MessageCircle,
+  Moon,
   Package,
   Search,
   ShoppingBag,
   Sparkles,
+  Sun,
   Truck,
   User,
   X,
@@ -23,6 +25,8 @@ export const Header: React.FC = () => {
     setIsSearchOpen,
     selectedCategorySlug,
     categories,
+    theme,
+    toggleTheme,
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -120,6 +124,31 @@ export const Header: React.FC = () => {
             >
               <MessageCircle className="w-4 h-4 text-[#25D366]" />
               <span>Aide WhatsApp</span>
+            </button>
+
+            {/* Mode Sombre Neumorphism Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Basculer en Mode Clair' : 'Activer le Mode Sombre Neumorphism'}
+              aria-label="Basculer le mode sombre"
+              className={`p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                theme === 'dark'
+                  ? 'bg-[#1e222a] text-amber-400 border border-white/10 shadow-[inset_2px_2px_5px_#0f1115,inset_-2px_-2px_5px_#2c323e]'
+                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200/90 shadow-2xs'
+              }`}
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-400 animate-spin-slow" />
+                  <span className="hidden lg:inline text-[11px] font-semibold text-amber-300">Clair</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-zinc-700" />
+                  <span className="hidden lg:inline text-[11px] font-semibold text-zinc-600">Sombre</span>
+                </>
+              )}
             </button>
 
             {/* Bouton Panier très visible */}
@@ -363,6 +392,29 @@ export const Header: React.FC = () => {
                 >
                   <User className="w-4 h-4 text-zinc-700" />
                   <span>Mon compte client</span>
+                </button>
+
+                {/* Neumorphic Dark Mode switch */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleTheme();
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-zinc-100 flex items-center justify-between font-semibold"
+                >
+                  <div className="flex items-center gap-2">
+                    {theme === 'dark' ? (
+                      <Sun className="w-4 h-4 text-amber-400" />
+                    ) : (
+                      <Moon className="w-4 h-4 text-zinc-700" />
+                    )}
+                    <span>Mode Sombre (Neumorphism)</span>
+                  </div>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                    theme === 'dark' ? 'bg-amber-400/20 text-amber-400' : 'bg-zinc-200 text-zinc-700'
+                  }`}>
+                    {theme === 'dark' ? 'Activé' : 'Désactivé'}
+                  </span>
                 </button>
               </div>
             </div>

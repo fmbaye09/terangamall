@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ExternalLink,
   MessageCircle,
   Package,
+  RefreshCw,
   ShieldCheck,
   Shirt,
   Truck,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatFCFA } from '../services/payment';
+import { checkPayDunyaInvoiceStatus } from '../services/paydunya';
 import { OrderStatusType } from '../types';
 
 const STANDARD_STEPS: { status: OrderStatusType; label: string; desc: string }[] = [
@@ -91,10 +94,67 @@ export const OrderTrackingPage: React.FC = () => {
     navigateTo,
     updateOrderStatus,
     confirmOrderPaymentWebhook,
+    pushToast,
   } = useStore();
+
+  const [isCheckingPayDunya, setIsCheckingPayDunya] = useState(false);
 
   const activeOrder =
     orders.find((o) => o.id === selectedOrderId) || orders[0];
+
+  // Vérification automatique au retour de PayDunya via return_url
+  useEffect(() => {
+    if (!activeOrder || activeOrder.paymentStatus === 'PAID') return;
+
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const query = hash.includes('?') ? hash.split('?')[1] : search.replace(/^\?/, '');
+    const params = new URLSearchParams(query);
+    const paydunyaStatus = params.get('paydunya_status');
+    const token = params.get('token') || params.get('invoice_token') || activeOrder.paydunyaToken;
+
+    if (activeOrder.paymentMethod === 'PAYDUNYA' && token) {
+      setIsCheckingPayDunya(true);
+      checkPayDunyaInvoiceStatus(token)
+        .then((res) => {
+          if (res.confirmed) {
+            confirmOrderPaymentWebhook(activeOrder.id);
+            pushToast(
+              'Paiement PayDunya Confirmé !',
+              `La facture ${token} a été confirmée avec succès par PayDunya.`
+            );
+          }
+        })
+        .finally(() => {
+          setIsCheckingPayDunya(false);
+        });
+    }
+  }, [activeOrder, confirmOrderPaymentWebhook, pushToast]);
+
+  const handleManualCheckPayDunya = async () => {
+    if (!activeOrder?.paydunyaToken || isCheckingPayDunya) return;
+    setIsCheckingPayDunya(true);
+    try {
+      const res = await checkPayDunyaInvoiceStatus(activeOrder.paydunyaToken);
+      if (res.confirmed) {
+        await confirmOrderPaymentWebhook(activeOrder.id);
+        pushToast(
+          'Paiement PayDunya Confirmé !',
+          `Paiement validé par PayDunya (${res.amount ? `${formatFCFA(res.amount)}` : 'Validé'}).`
+        );
+      } else {
+        pushToast(
+          'En attente de règlement PayDunya',
+          'La facture n\'est pas encore marquée comme payée sur PayDunya Sandbox.',
+          'info'
+        );
+      }
+    } catch {
+      pushToast('Erreur', 'Impossible de joindre l\'API PayDunya.', 'error');
+    } finally {
+      setIsCheckingPayDunya(false);
+    }
+  };
 
   if (!activeOrder) {
     return (
@@ -265,10 +325,19 @@ export const OrderTrackingPage: React.FC = () => {
                   {activeOrder.shippingAddress.street}, {activeOrder.shippingAddress.city}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-[#777777]">Moyen de paiement</span>
-                <span className="font-bold text-[#111111]">
-                  {activeOrder.paymentMethod}
+                <span className="font-bold text-[#111111] flex items-center gap-1.5">
+                  {activeOrder.paymentMethod === 'PAYDUNYA' ? (
+                    <>
+                      <span>PayDunya Sénégal</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#0084FF]/10 text-[#0084FF] font-bold">
+                        Sandbox
+                      </span>
+                    </>
+                  ) : (
+                    activeOrder.paymentMethod
+                  )}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -277,6 +346,14 @@ export const OrderTrackingPage: React.FC = () => {
                   {activeOrder.paymentReference}
                 </span>
               </div>
+              {activeOrder.paydunyaToken && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[#777777]">Token PayDunya</span>
+                  <span className="font-mono text-[11px] text-[#0084FF] font-bold bg-[#0084FF]/10 px-2 py-0.5 rounded">
+                    {activeOrder.paydunyaToken}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-[#777777]">Statut paiement</span>
                 <span
@@ -286,21 +363,59 @@ export const OrderTrackingPage: React.FC = () => {
                       : 'text-[#FF5A1F]'
                   }`}
                 >
-                  {activeOrder.paymentStatus}
+                  {activeOrder.paymentStatus === 'PAID' ? 'PAYÉ' : 'EN ATTENTE'}
                   {activeOrder.webhookConfirmedAt &&
-                    ` (Webhook ${activeOrder.webhookConfirmedAt})`}
+                    ` (Validé ${activeOrder.webhookConfirmedAt})`}
                 </span>
               </div>
             </div>
 
-            {activeOrder.paymentStatus !== 'PAID' && (
+            {activeOrder.paymentStatus !== 'PAID' && activeOrder.paymentMethod === 'PAYDUNYA' && (
+              <div className="space-y-2 pt-2">
+                {activeOrder.paydunyaToken && (
+                  <a
+                    href={`https://app.paydunya.com/sandbox-checkout/invoice/${activeOrder.paydunyaToken}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#0084FF] hover:bg-blue-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <span>Finaliser le paiement sur PayDunya</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleManualCheckPayDunya}
+                  disabled={isCheckingPayDunya}
+                  className="w-full py-2 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCheckingPayDunya ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingPayDunya ? 'Vérification PayDunya...' : 'Vérifier la confirmation PayDunya'}</span>
+                </button>
+              </div>
+            )}
+
+            {activeOrder.paymentStatus !== 'PAID' && activeOrder.paymentMethod !== 'PAYDUNYA' && (
               <button
                 type="button"
                 onClick={() => confirmOrderPaymentWebhook(activeOrder.id)}
-                className="w-full py-2.5 px-4 rounded-xl bg-[#111111] hover:bg-[#FF5A1F] text-white text-xs font-semibold transition-colors"
+                className="w-full py-2.5 px-4 rounded-xl bg-[#111111] hover:bg-[#FF5A1F] text-white text-xs font-semibold transition-colors cursor-pointer"
               >
                 Simuler la confirmation Webhook du paiement
               </button>
+            )}
+
+            {activeOrder.paymentStatus === 'PAID' && activeOrder.paydunyaToken && (
+              <a
+                href={activeOrder.paydunyaReceiptUrl || `https://app.paydunya.com/sandbox-receipt/pdf/${activeOrder.paydunyaToken}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 mt-2"
+              >
+                <span>Télécharger le reçu officiel PayDunya (PDF)</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             )}
 
             <div className="pt-4 border-t border-[#E5E5E5] flex items-baseline justify-between">

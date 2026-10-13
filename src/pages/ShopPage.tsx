@@ -3,6 +3,7 @@ import { ChevronRight, Filter, RotateCcw, Search, SlidersHorizontal, Star } from
 import { useStore } from '../context/StoreContext';
 import { formatFCFA } from '../services/payment';
 import { ProductCard } from '../components/ui/ProductCard';
+import { normalizeCategorySlug } from '../types';
 
 export const ShopPage: React.FC = () => {
   const {
@@ -14,7 +15,7 @@ export const ShopPage: React.FC = () => {
     setSearchQuery,
   } = useStore();
 
-  const [priceMax, setPriceMax] = useState<number>(500000);
+  const [priceMax, setPriceMax] = useState<number>(1000000);
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
   const [selectedSize, setSelectedSize] = useState<string>('ALL');
   const [onlyInStock, setOnlyInStock] = useState<boolean>(false);
@@ -26,20 +27,59 @@ export const ShopPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
 
+  // Auto-reset size and brand when changing category so valid products are never hidden
+  React.useEffect(() => {
+    setSelectedSize('ALL');
+    setSelectedBrand('ALL');
+    setCurrentPage(1);
+  }, [selectedCategorySlug]);
+
   const brands = useMemo(() => {
     const set = new Set<string>();
-    products.forEach((p) => set.add(p.brand));
+    const targetSlug = normalizeCategorySlug(selectedCategorySlug);
+    const pool =
+      selectedCategorySlug && selectedCategorySlug !== 'all'
+        ? products.filter(
+            (p) => normalizeCategorySlug(p.categorySlug || p.category) === targetSlug
+          )
+        : products;
+    pool.forEach((p) => {
+      if (p.brand) set.add(p.brand);
+    });
     return Array.from(set);
-  }, [products]);
+  }, [products, selectedCategorySlug]);
 
-  const allSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '40', '41', '42', '43', '44'];
+  // Options / Tailles dynamiques adaptées à la catégorie consultée
+  const availableSizes = useMemo(() => {
+    const set = new Set<string>();
+    const targetSlug = normalizeCategorySlug(selectedCategorySlug);
+    const pool =
+      selectedCategorySlug && selectedCategorySlug !== 'all'
+        ? products.filter(
+            (p) => normalizeCategorySlug(p.categorySlug || p.category) === targetSlug
+          )
+        : products;
+
+    pool.forEach((p) => {
+      p.sizes?.forEach((s) => set.add(s));
+    });
+
+    const list = Array.from(set);
+    if (list.length === 0) {
+      return ['XS', 'S', 'M', 'L', 'XL', 'XXL', '40', '41', '42', '43', '44'];
+    }
+    return list;
+  }, [products, selectedCategorySlug]);
 
   const filteredProducts = useMemo(() => {
+    const targetSlug = normalizeCategorySlug(selectedCategorySlug);
+
     return products
       .filter((p) => p.status !== 'ARCHIVED')
       .filter((p) => {
         if (selectedCategorySlug && selectedCategorySlug !== 'all') {
-          return p.categorySlug === selectedCategorySlug;
+          const prodCatSlug = normalizeCategorySlug(p.categorySlug || p.category);
+          return prodCatSlug === targetSlug || p.categorySlug === selectedCategorySlug;
         }
         return true;
       })
@@ -91,7 +131,7 @@ export const ShopPage: React.FC = () => {
   const resetFilters = () => {
     navigateTo('shop', { categorySlug: 'all' });
     setSearchQuery('');
-    setPriceMax(100000);
+    setPriceMax(1000000);
     setSelectedBrand('ALL');
     setSelectedSize('ALL');
     setOnlyInStock(false);
@@ -104,7 +144,11 @@ export const ShopPage: React.FC = () => {
   const activeCategoryName =
     selectedCategorySlug === 'all'
       ? 'Tous les produits'
-      : categories.find((c) => c.slug === selectedCategorySlug)?.name || 'Catalogue';
+      : categories.find(
+          (c) =>
+            c.slug === selectedCategorySlug ||
+            c.slug === normalizeCategorySlug(selectedCategorySlug)
+        )?.name || 'Catalogue';
 
   return (
     <div className="max-w-[1360px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -229,26 +273,34 @@ export const ShopPage: React.FC = () => {
                   <span>Toutes les catégories</span>
                   <span className="tabular-nums">{products.length}</span>
                 </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      navigateTo('shop', { categorySlug: cat.slug });
-                      setCurrentPage(1);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
-                      selectedCategorySlug === cat.slug
-                        ? 'bg-[#111111] text-white font-semibold'
-                        : 'text-[#777777] hover:text-[#111111] hover:bg-white'
-                    }`}
-                  >
-                    <span>{cat.name}</span>
-                    <span className="tabular-nums">
-                      {products.filter((p) => p.categorySlug === cat.slug).length}
-                    </span>
-                  </button>
-                ))}
+                {categories.map((cat) => {
+                  const isActive =
+                    selectedCategorySlug === cat.slug ||
+                    normalizeCategorySlug(selectedCategorySlug) === cat.slug;
+                  const catCount = products.filter(
+                    (p) =>
+                      normalizeCategorySlug(p.categorySlug || p.category) === cat.slug
+                  ).length;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        navigateTo('shop', { categorySlug: cat.slug });
+                        setCurrentPage(1);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between ${
+                        isActive
+                          ? 'bg-[#111111] text-white font-semibold'
+                          : 'text-[#777777] hover:text-[#111111] hover:bg-white'
+                      }`}
+                    >
+                      <span>{cat.name}</span>
+                      <span className="tabular-nums font-mono">{catCount}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -263,7 +315,7 @@ export const ShopPage: React.FC = () => {
               <input
                 type="range"
                 min={5000}
-                max={500000}
+                max={1000000}
                 step={5000}
                 value={priceMax}
                 onChange={(e) => {
@@ -274,7 +326,7 @@ export const ShopPage: React.FC = () => {
               />
               <div className="flex justify-between text-[11px] text-[#777777] tabular-nums mt-1">
                 <span>5 000 FCFA</span>
-                <span>500 000 FCFA</span>
+                <span>1 000 000 FCFA</span>
               </div>
             </div>
 
@@ -298,9 +350,15 @@ export const ShopPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Size Filter */}
+            {/* Size / Option Filter (dynamique selon la catégorie) */}
             <div className="pt-4 border-t border-[#E5E5E5]">
-              <h3 className="text-xs font-semibold text-[#111111] mb-2">Taille</h3>
+              <h3 className="text-xs font-semibold text-[#111111] mb-2">
+                {normalizeCategorySlug(selectedCategorySlug) === 'electronique'
+                  ? 'Capacité / Format'
+                  : normalizeCategorySlug(selectedCategorySlug) === 'sport'
+                  ? 'Pointure / Option'
+                  : 'Option / Taille'}
+              </h3>
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
@@ -313,7 +371,7 @@ export const ShopPage: React.FC = () => {
                 >
                   Toutes
                 </button>
-                {allSizes.map((sz) => (
+                {availableSizes.map((sz) => (
                   <button
                     key={sz}
                     type="button"

@@ -13,8 +13,13 @@ import {
 
 export const HERO_BANNER_URL = '/src/assets/images/marketplace_hero_banner_1791237117872.jpg';
 export const SMARTPHONE_IMAGE_URL = '/src/assets/images/product_smartphone_pro_1791237127740.jpg';
+export const PHONE_BLACK_TITANIUM_IMAGE_URL = '/src/assets/images/phone_black_titanium_1791748499613.jpg';
+export const PHONE_OCEAN_BLUE_IMAGE_URL = '/src/assets/images/phone_ocean_blue_1791748484150.jpg';
 export const EARBUDS_IMAGE_URL = '/src/assets/images/product_earbuds_anc_1791237137291.jpg';
 export const SMARTWATCH_IMAGE_URL = '/src/assets/images/product_smartwatch_ultra_1791249417687.jpg';
+export const SMARTWATCH_STEALTH_BLACK_IMAGE_URL = '/src/assets/images/smartwatch_stealth_black_1791748516094.jpg';
+export const SNEAKER_BLACK_IMAGE_URL = '/src/assets/images/sneakers_all_black_1791748534181.jpg';
+export const SPEAKER_IMAGE_URL = '/src/assets/images/bluetooth_speaker_waterproof_1791748551617.jpg';
 export const AIRFRYER_IMAGE_URL = '/src/assets/images/product_airfryer_kitchen_1791237321177.jpg';
 export const HOODIE_IMAGE_URL = '/src/assets/images/product_premium_hoodie_1791068836590.jpg';
 export const SNEAKER_IMAGE_URL = '/src/assets/images/product_sneakers_air_1791068845803.jpg';
@@ -93,22 +98,35 @@ export function buildVariantsMatrix(
   basePrice: number,
   sizes: string[],
   colors: { name: string; hex: string; image?: string }[],
-  priceDeltas?: Record<string, number>
+  priceDeltas?: Record<string, number>,
+  baseOldPrice?: number
 ): ProductVariantItem[] {
   const variants: ProductVariantItem[] = [];
   sizes.forEach((sz, sIdx) => {
     colors.forEach((col, cIdx) => {
       const colorShort = col.name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
       const seed = (sIdx + 1) * (cIdx + 2);
-      const stock = (seed % 14) + 4; // Realistic stock per variant
+      const stock = (seed % 14) + 4; // Stock réaliste par variante
       const delta = (priceDeltas && priceDeltas[sz]) || 0;
+      const variantPrice = basePrice + delta;
+
+      // Calcul cohérent de l'ancien prix barré pour la variante
+      let variantOldPrice: number | undefined = undefined;
+      if (baseOldPrice && baseOldPrice > basePrice) {
+        const ratio = baseOldPrice / basePrice;
+        // Prix barré proportionnel ajusté
+        const proportionalOld = Math.round((variantPrice * ratio) / 500) * 500;
+        variantOldPrice = Math.max(proportionalOld, variantPrice + 1000);
+      }
+
       variants.push({
         id: `var-${baseSku}-${col.name}-${sz}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         size: sz,
         color: col.name,
         colorHex: col.hex,
         sku: `${baseSku}-${colorShort}-${sz}`,
-        price: basePrice + delta,
+        price: variantPrice,
+        oldPrice: variantOldPrice,
         stock,
         image: col.image,
         active: true,
@@ -146,12 +164,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'Électronique & High-Tech',
     categorySlug: 'electronique',
     brand: 'Novacell Global',
-    images: [SMARTPHONE_IMAGE_URL, EARBUDS_IMAGE_URL, HERO_BANNER_URL],
+    images: [SMARTPHONE_IMAGE_URL, PHONE_BLACK_TITANIUM_IMAGE_URL, PHONE_OCEAN_BLUE_IMAGE_URL, EARBUDS_IMAGE_URL],
     sizes: ['128 Go', '256 Go', '512 Go'],
     colors: [
       { name: 'Titane Naturel', hex: '#8E8D8A', image: SMARTPHONE_IMAGE_URL },
-      { name: 'Noir Sidéral', hex: '#1C1C1E', image: EARBUDS_IMAGE_URL },
-      { name: 'Bleu Océan', hex: '#1E3A8A', image: SMARTPHONE_IMAGE_URL },
+      { name: 'Noir Sidéral', hex: '#1C1C1E', image: PHONE_BLACK_TITANIUM_IMAGE_URL },
+      { name: 'Bleu Océan', hex: '#1E3A8A', image: PHONE_OCEAN_BLUE_IMAGE_URL },
     ],
     badge: 'Bestseller',
     isNew: true,
@@ -171,10 +189,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       ['128 Go', '256 Go', '512 Go'],
       [
         { name: 'Titane Naturel', hex: '#8E8D8A', image: SMARTPHONE_IMAGE_URL },
-        { name: 'Noir Sidéral', hex: '#1C1C1E', image: EARBUDS_IMAGE_URL },
-        { name: 'Bleu Océan', hex: '#1E3A8A', image: SMARTPHONE_IMAGE_URL },
+        { name: 'Noir Sidéral', hex: '#1C1C1E', image: PHONE_BLACK_TITANIUM_IMAGE_URL },
+        { name: 'Bleu Océan', hex: '#1E3A8A', image: PHONE_OCEAN_BLUE_IMAGE_URL },
       ],
-      { '128 Go': 0, '256 Go': 40000, '512 Go': 90000 }
+      { '128 Go': 0, '256 Go': 40000, '512 Go': 90000 },
+      420000
     ),
     reviews: [
       {
@@ -220,11 +239,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'Électronique & High-Tech',
     categorySlug: 'electronique',
     brand: 'Apex Tech',
-    images: [SMARTWATCH_IMAGE_URL, SMARTPHONE_IMAGE_URL, EARBUDS_IMAGE_URL],
+    images: [SMARTWATCH_IMAGE_URL, SMARTWATCH_STEALTH_BLACK_IMAGE_URL, SMARTPHONE_IMAGE_URL],
     sizes: ['Boîtier 49mm Standard', 'Pack Duo avec 2 Bracelets'],
     colors: [
       { name: 'Orange Sport', hex: '#FF5A1F', image: SMARTWATCH_IMAGE_URL },
-      { name: 'Noir Furtif', hex: '#111111', image: SMARTPHONE_IMAGE_URL },
+      { name: 'Noir Furtif', hex: '#111111', image: SMARTWATCH_STEALTH_BLACK_IMAGE_URL },
       { name: 'Titane Gris', hex: '#8E8D8A', image: SMARTWATCH_IMAGE_URL },
     ],
     badge: 'Bestseller',
@@ -242,10 +261,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       ['Boîtier 49mm Standard', 'Pack Duo avec 2 Bracelets'],
       [
         { name: 'Orange Sport', hex: '#FF5A1F', image: SMARTWATCH_IMAGE_URL },
-        { name: 'Noir Furtif', hex: '#111111', image: SMARTPHONE_IMAGE_URL },
+        { name: 'Noir Furtif', hex: '#111111', image: SMARTWATCH_STEALTH_BLACK_IMAGE_URL },
         { name: 'Titane Gris', hex: '#8E8D8A', image: SMARTWATCH_IMAGE_URL },
       ],
-      { 'Boîtier 49mm Standard': 0, 'Pack Duo avec 2 Bracelets': 8000 }
+      { 'Boîtier 49mm Standard': 0, 'Pack Duo avec 2 Bracelets': 8000 },
+      62000
     ),
     reviews: [
       {
@@ -295,10 +315,17 @@ export const INITIAL_PRODUCTS: Product[] = [
     status: 'ACTIVE',
     weightKg: 0.12,
     tieredDiscounts: DEFAULT_TIERED_DISCOUNTS,
-    variants: buildVariantsMatrix('TM-AUD-PULSE', 38000, ['Standard'], [
-      { name: 'Noir Mat', hex: '#111111', image: EARBUDS_IMAGE_URL },
-      { name: 'Blanc Ivoire', hex: '#F3F4F6', image: SMARTPHONE_IMAGE_URL },
-    ]),
+    variants: buildVariantsMatrix(
+      'TM-AUD-PULSE',
+      38000,
+      ['Standard'],
+      [
+        { name: 'Noir Mat', hex: '#111111', image: EARBUDS_IMAGE_URL },
+        { name: 'Blanc Ivoire', hex: '#F3F4F6', image: SMARTPHONE_IMAGE_URL },
+      ],
+      undefined,
+      55000
+    ),
     reviews: [
       {
         id: 'rev-aud-1',
@@ -312,7 +339,67 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
   },
 
-  // 4. Maison & Électroménager: Air Fryer XXL 6.5L
+  // 4. High-Tech: Enceinte Bluetooth Waterproof BassBoost 360°
+  {
+    id: 'prod-tech-3',
+    name: 'Enceinte Bluetooth Sans Fil Aura Wave 360° – Son Stéréo 30W & Étanche IPX7',
+    slug: 'enceinte-bluetooth-aura-wave-360',
+    description:
+      'Enceinte nomade puissante avec diffusion acoustique à 360 degrés et radiateurs passifs BassBoost. Parfaite pour la plage des Almadies, les sorties à Saly ou les soirées à la maison avec une autonomie de 20 heures et recharge rapide USB-C.',
+    features: [
+      'Puissance sonore 30W RMS avec clarté vocale HD et basses profondes',
+      'Certification d’étanchéité totale IPX7 (résiste à l’immersion et au sable)',
+      'Batterie longue durée 5200 mAh (jusqu’à 20 heures d’écoute non-stop)',
+      'Fonction Powerbank intégrée pour recharger votre smartphone en déplacement',
+      'Mode TWS pour jumeler deux enceintes en véritable son stéréo sans fil',
+    ],
+    price: 29000,
+    oldPrice: 42000,
+    stock: 38,
+    sku: 'TM-AUD-AURA360',
+    category: 'Électronique & High-Tech',
+    categorySlug: 'electronique',
+    brand: 'AcousticLab',
+    images: [SPEAKER_IMAGE_URL, EARBUDS_IMAGE_URL],
+    sizes: ['Standard 30W'],
+    colors: [
+      { name: 'Noir Carbone', hex: '#1C1C1E', image: SPEAKER_IMAGE_URL },
+      { name: 'Gris Métallique', hex: '#6B7280', image: SPEAKER_IMAGE_URL },
+    ],
+    badge: 'New',
+    isNew: true,
+    isBestSeller: false,
+    isFeatured: true,
+    rating: 4.8,
+    reviewCount: 74,
+    status: 'ACTIVE',
+    weightKg: 0.65,
+    tieredDiscounts: DEFAULT_TIERED_DISCOUNTS,
+    variants: buildVariantsMatrix(
+      'TM-AUD-AURA360',
+      29000,
+      ['Standard 30W'],
+      [
+        { name: 'Noir Carbone', hex: '#1C1C1E', image: SPEAKER_IMAGE_URL },
+        { name: 'Gris Métallique', hex: '#6B7280', image: SPEAKER_IMAGE_URL },
+      ],
+      undefined,
+      42000
+    ),
+    reviews: [
+      {
+        id: 'rev-spk-1',
+        author: 'Alioune Badara Diouf',
+        role: 'Photographe',
+        city: 'Dakar, Ouakam',
+        rating: 5,
+        comment: 'Super puissance pour sa taille ! Le son est très clair et les basses sont bien présentes.',
+        date: '04 Octobre 2026',
+      },
+    ],
+  },
+
+  // 5. Maison & Électroménager: Air Fryer XXL 6.5L
   {
     id: 'prod-app-1',
     name: 'Friteuse Sans Huile Air Fryer Digital 6.5L – Écran Tactile 8 Programmes',
@@ -356,7 +443,8 @@ export const INITIAL_PRODUCTS: Product[] = [
         { name: 'Noir Onyx & Inox', hex: '#111111', image: AIRFRYER_IMAGE_URL },
         { name: 'Blanc & Doré Luxe', hex: '#F9FAFB', image: AIRFRYER_IMAGE_URL },
       ],
-      { '4.5 Litres (Compact)': -10000, '6.5 Litres (Familial)': 0, '8.5 Litres (Double Bac)': 18000 }
+      { '4.5 Litres (Compact)': -10000, '6.5 Litres (Familial)': 0, '8.5 Litres (Double Bac)': 18000 },
+      68000
     ),
     reviews: [
       {
@@ -371,7 +459,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
   },
 
-  // 5. Mode & Vêtements: Hoodie Coton Peigné 420g
+  // 6. Mode & Vêtements: Hoodie Coton Peigné 420g
   {
     id: 'prod-mod-1',
     name: 'Hoodie Oversized Heavyweight 420g – Coton Peigné Pur & Coupe Boxy',
@@ -408,11 +496,18 @@ export const INITIAL_PRODUCTS: Product[] = [
     status: 'ACTIVE',
     weightKg: 0.72,
     tieredDiscounts: DEFAULT_TIERED_DISCOUNTS,
-    variants: buildVariantsMatrix('TM-MOD-HOOD', 32000, ['S', 'M', 'L', 'XL', 'XXL'], [
-      { name: 'Sable du Sahel', hex: '#D2B48C', image: HOODIE_IMAGE_URL },
-      { name: 'Noir Onyx', hex: '#111111', image: HERO_IMAGE_URL },
-      { name: 'Vert Kaki', hex: '#4B5320', image: HOODIE_IMAGE_URL },
-    ]),
+    variants: buildVariantsMatrix(
+      'TM-MOD-HOOD',
+      32000,
+      ['S', 'M', 'L', 'XL', 'XXL'],
+      [
+        { name: 'Sable du Sahel', hex: '#D2B48C', image: HOODIE_IMAGE_URL },
+        { name: 'Noir Onyx', hex: '#111111', image: HERO_IMAGE_URL },
+        { name: 'Vert Kaki', hex: '#4B5320', image: HOODIE_IMAGE_URL },
+      ],
+      undefined,
+      42000
+    ),
     reviews: [
       {
         id: 'rev-mod-1',
@@ -426,7 +521,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
   },
 
-  // 6. Chaussures & Sport: Sneakers Air Pulse 270
+  // 7. Chaussures & Sport: Sneakers Air Pulse 270
   {
     id: 'prod-spo-1',
     name: 'Sneakers Performance Air Pulse 270 – Semelle Bulle Amorti Panoramique',
@@ -446,11 +541,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'Sports, Fitness & Baskets',
     categorySlug: 'sport',
     brand: 'Kora Athletics',
-    images: [SNEAKER_IMAGE_URL, HERO_BANNER_URL],
+    images: [SNEAKER_IMAGE_URL, SNEAKER_BLACK_IMAGE_URL, HERO_BANNER_URL],
     sizes: ['39', '40', '41', '42', '43', '44', '45'],
     colors: [
       { name: 'Blanc & Orange Teranga', hex: '#FF5A1F', image: SNEAKER_IMAGE_URL },
-      { name: 'Noir Furtif', hex: '#111111', image: SNEAKER_IMAGE_URL },
+      { name: 'Noir Furtif', hex: '#111111', image: SNEAKER_BLACK_IMAGE_URL },
     ],
     badge: 'Promo',
     isNew: false,
@@ -461,10 +556,17 @@ export const INITIAL_PRODUCTS: Product[] = [
     status: 'ACTIVE',
     weightKg: 0.85,
     tieredDiscounts: DEFAULT_TIERED_DISCOUNTS,
-    variants: buildVariantsMatrix('TM-SNK-PULSE270', 58000, ['39', '40', '41', '42', '43', '44', '45'], [
-      { name: 'Blanc & Orange Teranga', hex: '#FF5A1F', image: SNEAKER_IMAGE_URL },
-      { name: 'Noir Furtif', hex: '#111111', image: SNEAKER_IMAGE_URL },
-    ]),
+    variants: buildVariantsMatrix(
+      'TM-SNK-PULSE270',
+      58000,
+      ['39', '40', '41', '42', '43', '44', '45'],
+      [
+        { name: 'Blanc & Orange Teranga', hex: '#FF5A1F', image: SNEAKER_IMAGE_URL },
+        { name: 'Noir Furtif', hex: '#111111', image: SNEAKER_BLACK_IMAGE_URL },
+      ],
+      undefined,
+      75000
+    ),
     reviews: [
       {
         id: 'rev-snk-1',
@@ -478,7 +580,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
   },
 
-  // 7. Personnalisation & Atelier: Flocage & Textile Sur-Mesure
+  // 8. Personnalisation & Atelier: Flocage & Textile Sur-Mesure
   {
     id: 'prod-floc-1',
     name: 'Maillot & T-Shirt Personnalisé – Flocage Thermique Officiel Nom & Numéro',
@@ -515,11 +617,18 @@ export const INITIAL_PRODUCTS: Product[] = [
     status: 'ACTIVE',
     weightKg: 0.25,
     tieredDiscounts: DEFAULT_TIERED_DISCOUNTS,
-    variants: buildVariantsMatrix('TM-FLOC-CUST', 24000, ['S', 'M', 'L', 'XL', 'XXL'], [
-      { name: 'Vert Teranga', hex: '#0F4D2A', image: JERSEY_IMAGE_URL },
-      { name: 'Noir Onyx', hex: '#111111', image: FLOCAGE_IMAGE_URL },
-      { name: 'Blanc Craie', hex: '#F7F7F5', image: HERO_IMAGE_URL },
-    ]),
+    variants: buildVariantsMatrix(
+      'TM-FLOC-CUST',
+      24000,
+      ['S', 'M', 'L', 'XL', 'XXL'],
+      [
+        { name: 'Vert Teranga', hex: '#0F4D2A', image: JERSEY_IMAGE_URL },
+        { name: 'Noir Onyx', hex: '#111111', image: FLOCAGE_IMAGE_URL },
+        { name: 'Blanc Craie', hex: '#F7F7F5', image: HERO_IMAGE_URL },
+      ],
+      undefined,
+      30000
+    ),
     reviews: [
       {
         id: 'rev-floc-1',

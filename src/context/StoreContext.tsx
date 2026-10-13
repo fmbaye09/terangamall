@@ -24,8 +24,14 @@ import {
   PaymentMethodType,
   PaymentStatusType,
   Product,
+  ProductVariantItem,
   QuoteRequest,
   RouteView,
+  findMatchingVariant,
+  getVariantImage,
+  getVariantOldPrice,
+  getVariantPrice,
+  normalizeCategorySlug,
 } from '../types';
 
 export interface ToastMessage {
@@ -47,6 +53,11 @@ interface StoreContextValue {
     view: RouteView,
     options?: { productSlug?: string; categorySlug?: string; orderId?: string }
   ) => void;
+
+  // Theme & Neumorphism
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  setTheme: (t: 'light' | 'dark') => void;
 
   // Catalog & Variants
   products: Product[];
@@ -174,16 +185,84 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
+  // Mode Sombre Neumorphism
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('terangamall_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+      return typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('terangamall_theme', theme);
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark-neu');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.removeAttribute('data-theme');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      let list = INITIAL_PRODUCTS;
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].variants) {
-          return parsed;
+          list = parsed;
         }
       }
-      return INITIAL_PRODUCTS;
+      // Assure que tous les produits ont leur slug normalisé, leurs variantes avec photos & prix barrés
+      const normalizedList: Product[] = list.map((p): Product => {
+        const catSlug = normalizeCategorySlug(p.categorySlug || p.category);
+        const ratio = p.oldPrice && p.price ? p.oldPrice / p.price : 1;
+        const variantsWithImagesAndOldPrice = p.variants?.map((v): ProductVariantItem => {
+          const matchingColor = p.colors?.find((c) => c.name === v.color);
+          const computedOld =
+            v.oldPrice && v.oldPrice > v.price
+              ? v.oldPrice
+              : p.oldPrice && p.oldPrice > p.price
+              ? Math.max(Math.round((v.price * ratio) / 500) * 500, v.price + 1000)
+              : undefined;
+          return {
+            ...v,
+            oldPrice: computedOld,
+            image: v.image || matchingColor?.image,
+          };
+        });
+
+        return {
+          ...p,
+          categorySlug: catSlug,
+          variants: variantsWithImagesAndOldPrice,
+        };
+      });
+
+      // S'assurer que les produits initiaux essentiels (ex: nouvelle enceinte) sont présents
+      INITIAL_PRODUCTS.forEach((initProd) => {
+        if (!normalizedList.some((p) => p.id === initProd.id)) {
+          normalizedList.push(initProd);
+        }
+      });
+
+      return normalizedList;
     } catch {
       return INITIAL_PRODUCTS;
     }
@@ -445,13 +524,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Catalog CRUD & AliExpress-style operations
   const addProduct = (p: Omit<Product, 'id' | 'rating' | 'reviewCount' | 'reviews'>) => {
+    const catSlug = normalizeCategorySlug(p.categorySlug || p.category);
     const newVariants =
       p.variants && p.variants.length > 0
         ? p.variants
-        : buildVariantsMatrix(p.sku, p.price, p.sizes, p.colors);
+        : buildVariantsMatrix(p.sku, p.price, p.sizes, p.colors, undefined, p.oldPrice);
 
     const newProd: Product = {
       ...p,
+      categorySlug: catSlug,
       variants: newVariants,
       id: `prod-${Date.now()}`,
       rating: 5.0,
@@ -466,7 +547,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProducts((prev) =>
       prev.map((prod) => {
         if (prod.id !== id) return prod;
-        const merged = { ...prod, ...updates };
+        const catSlug = updates.category || updates.categorySlug
+          ? normalizeCategorySlug(updates.categorySlug || updates.category || prod.categorySlug)
+          : prod.categorySlug;
+        const merged = { ...prod, ...updates, categorySlug: catSlug };
         // If price or sizes changed, update total stock or variants accordingly
         if (updates.variants) {
           merged.stock = updates.variants.reduce((sum, v) => sum + (v.active ? v.stock : 0), 0);
@@ -569,17 +653,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Cart & Wishlist
   const addToCartProduct = (product: Product, size: string, color: string, quantity = 1) => {
     // Check specific variant stock if available
-    const matchedVariant = product.variants?.find(
-      (v) => v.size === size && v.color === color
-    );
-    const availableStock = matchedVariant ? matchedVariant.stock : product.stock;
+    const matchedVariant = findMatchingVariant(product, size, color);
+    const availableStock = matchedVariant !== undefined ? matchedVariant.stock : product.stock;
 
     if (availableStock <= 0 || product.status === 'OUT_OF_STOCK') {
-      pushToast('Rupture de stock', `La taille ${size} en ${color} est en rupture.`, 'error');
+      pushToast('Rupture de stock', `La variante (${size} · ${color}) est en rupture.`, 'error');
       return;
     }
 
-    const unitPrice = matchedVariant ? matchedVariant.price : product.price;
+    const variantImage = getVariantImage(product, color, matchedVariant);
+    const unitPrice = getVariantPrice(product, matchedVariant);
+    const oldUnitPrice = getVariantOldPrice(product, matchedVariant);
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
@@ -595,6 +679,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updated[existingIndex] = {
           ...updated[existingIndex],
           quantity: updated[existingIndex].quantity + quantity,
+          unitPrice,
+          oldUnitPrice,
+          selectedImage: variantImage,
         };
         return updated;
       }
@@ -606,8 +693,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           product,
           selectedSize: size,
           selectedColor: color,
+          selectedImage: variantImage,
+          selectedSku: matchedVariant ? matchedVariant.sku : product.sku,
           quantity,
           unitPrice,
+          oldUnitPrice,
         },
       ];
     });
@@ -783,6 +873,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
+    const paydunyaToken =
+      input.paymentMethod === 'PAYDUNYA'
+        ? `tok_sandbox_${orderNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${Date.now().toString().slice(-6)}`
+        : undefined;
+    const paydunyaReceiptUrl = paydunyaToken
+      ? `https://app.paydunya.com/sandbox-receipt/pdf/${paydunyaToken}`
+      : undefined;
+
     const newOrder: Order = {
       id: orderId,
       orderNumber,
@@ -801,6 +899,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       paymentMethod: input.paymentMethod,
       paymentStatus: finalPaymentStatus,
       paymentReference: paymentInit.providerReference,
+      paydunyaToken,
+      paydunyaReceiptUrl,
       webhookConfirmedAt,
       orderStatus: initialOrderStatus,
       isFlocageOrder,
@@ -1052,6 +1152,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         dismissToast,
         isSearchOpen,
         setIsSearchOpen,
+        theme,
+        toggleTheme,
+        setTheme,
       }}
     >
       {children}

@@ -9,6 +9,31 @@
     --color-accent-orange-light: #FFE8DE;
     --color-text-secondary: #777777;
     --color-border: #E5E5E5;
+
+    /* Neumorphism tokens (Light default) */
+    --neu-base: #F3F4F6;
+    --neu-flat-shadow: 6px 6px 14px rgba(0, 0, 0, 0.06), -6px -6px 14px rgba(255, 255, 255, 0.9);
+    --neu-inset-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.08), inset -3px -3px 6px rgba(255, 255, 255, 0.9);
+  }
+
+  /* ======================================================== */
+  /* NEUMORPHISME DARK SYSTEM TOKENS                           */
+  /* ======================================================== */
+  html.dark {
+    color-scheme: dark;
+    --color-primary-black: #f8fafc;
+    --color-pure-white: #1c2027;
+    --color-bg-secondary: #16181d;
+    --color-text-secondary: #94a3b8;
+    --color-border: rgba(255, 255, 255, 0.08);
+
+    --neu-base: #16181d;
+    --neu-surface: #1d2129;
+    --neu-surface-hover: #232832;
+    --neu-shadow-dark: #0f1115;
+    --neu-shadow-light: #282e3a;
+    --neu-flat-shadow: 6px 6px 14px #0f1115, -6px -6px 14px #262c37;
+    --neu-inset-shadow: inset 3px 3px 7px #0e1014, inset -3px -3px 7px #252b36;
   }
 
   body {
@@ -16,6 +41,12 @@
     color: #111111;
     background-color: #FFFFFF;
     overflow-x: hidden;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.dark body {
+    color: #f1f5f9;
+    background-color: #15181e;
   }
 
   h1, h2, h3, h4, .font-display {
@@ -31,6 +62,151 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* ======================================================== */
+/* TACTILE NEUMORPHIC UTILITY CLASSES                       */
+/* ======================================================== */
+.neu-flat {
+  background-color: #1d2129;
+  box-shadow: 6px 6px 14px #0f1115, -6px -6px 14px #262c37;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.neu-inset {
+  background-color: #15181e;
+  box-shadow: inset 3px 3px 7px #0e1014, inset -3px -3px 7px #252b36;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.neu-convex {
+  background: linear-gradient(145deg, #222731, #1a1e25);
+  box-shadow: 6px 6px 14px #0f1115, -6px -6px 14px #262c37;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.neu-concave {
+  background: linear-gradient(145deg, #191c23, #212630);
+  box-shadow: 6px 6px 14px #0f1115, -6px -6px 14px #262c37;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.neu-glow {
+  box-shadow: 0 0 20px rgba(255, 90, 31, 0.35), 4px 4px 10px #0f1115;
+}
+
+.neu-button {
+  background: #1e222a;
+  box-shadow: 4px 4px 10px #0f1115, -4px -4px 10px #272d38;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.18s ease;
+}
+
+.neu-button:active {
+  box-shadow: inset 3px 3px 6px #0f1115, inset -3px -3px 6px #272d38;
+  transform: translateY(1px);
+}
+
+/* ======================================================== */
+/* GLOBAL DARK NEUMORPHISM ADAPTIVE RULES                   */
+/* ======================================================== */
+html.dark .bg-white,
+html.dark .bg-\[\#FFFFFF\] {
+  background-color: #1c2028 !important;
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: 6px 6px 16px #0e1014, -5px -5px 14px #252b36;
+}
+
+html.dark .bg-zinc-50,
+html.dark .bg-zinc-100,
+html.dark .bg-\[\#F7F7F5\],
+html.dark .bg-\[\#F7F7F6\],
+html.dark .bg-\[\#FAF9F7\],
+html.dark .bg-\[\#F9F9F8\] {
+  background-color: #16181f !important;
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark header.bg-white\/95 {
+  background-color: rgba(26, 29, 36, 0.94) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* Debossed Inset Fields (Neumorphic Inputs) */
+html.dark input[type="text"],
+html.dark input[type="number"],
+html.dark input[type="email"],
+html.dark input[type="tel"],
+html.dark input[type="search"],
+html.dark textarea,
+html.dark select {
+  background-color: #14161c !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: inset 3px 3px 7px #0c0e12, inset -3px -3px 7px #222731 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Borders */
+html.dark .border-zinc-200,
+html.dark .border-zinc-200\/80,
+html.dark .border-zinc-200\/90,
+html.dark .border-zinc-200\/70,
+html.dark .border-zinc-300,
+html.dark .border-\[\#E5E5E5\] {
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Text adaptations */
+html.dark .text-zinc-950,
+html.dark .text-zinc-900,
+html.dark .text-zinc-800,
+html.dark .text-\[\#111111\] {
+  color: #f8fafc !important;
+}
+
+html.dark .text-zinc-600,
+html.dark .text-zinc-500,
+html.dark .text-\[\#777777\] {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-zinc-400 {
+  color: #64748b !important;
+}
+
+/* Cards & Modals in Dark Neumorphism */
+html.dark article,
+html.dark .rounded-2xl.border,
+html.dark .rounded-3xl.border {
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Smooth dark scrollbars */
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #14161c;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #252a35;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #333a49;
 }
 
 @media (prefers-reduced-motion: reduce) {
