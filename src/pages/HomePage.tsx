@@ -147,6 +147,8 @@ export const HomePage: React.FC = () => {
                 <SafeImage
                   src={HERO_BANNER_URL}
                   alt="Articles disponibles sur TerangaMall"
+                  sizes="(min-width: 1024px) 42vw, 100vw"
+                  priority
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-5">
@@ -200,6 +202,8 @@ export const HomePage: React.FC = () => {
                 <SafeImage
                   src={cat.image}
                   alt={cat.name}
+                  sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 50vw"
+                  maxWidth={640}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
               </div>

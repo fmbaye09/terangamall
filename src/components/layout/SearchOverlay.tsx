@@ -199,6 +199,8 @@ export const SearchOverlay: React.FC = () => {
                       <SafeImage
                         src={prod.images[0]}
                         alt={prod.name}
+                        sizes="56px"
+                        maxWidth={160}
                         className="w-full h-full object-cover"
                       />
                     </div>

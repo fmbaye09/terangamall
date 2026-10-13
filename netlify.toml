@@ -1,0 +1,13 @@
+# Les anciens chemins d'images (/src/assets/images/...) peuvent encore être
+# stockés dans le localStorage des visiteurs : on les redirige vers /images/.
+[[redirects]]
+  from = "/src/assets/images/*"
+  to = "/images/:splat"
+  status = 301
+
+# Les images produits changent rarement : cache navigateur d'une semaine.
+# (Les versions redimensionnées par Netlify Image CDN héritent de ces en-têtes.)
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"

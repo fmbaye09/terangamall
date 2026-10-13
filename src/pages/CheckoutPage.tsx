@@ -521,6 +521,8 @@ export const CheckoutPage: React.FC = () => {
                               : item.selectedImage || item.product?.images[0] || FLOCAGE_IMAGE_URL
                           }
                           alt="Article"
+                          sizes="40px"
+                          maxWidth={160}
                           className="w-full h-full object-cover"
                         />
                       </div>

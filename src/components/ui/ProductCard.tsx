@@ -67,6 +67,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <SafeImage
             src={displayImage}
             alt={`${product.name} - ${activeColor}`}
+            sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            maxWidth={960}
             className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
           />
 

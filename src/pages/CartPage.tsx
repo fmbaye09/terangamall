@@ -144,6 +144,8 @@ export const CartPage: React.FC = () => {
                             ? 'Prestation Flocage'
                             : item.product?.name || 'Produit'
                         }
+                        sizes="96px"
+                        maxWidth={320}
                         className="w-full h-full object-cover"
                       />
                     </div>

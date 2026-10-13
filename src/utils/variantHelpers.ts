@@ -151,7 +151,7 @@ export function getVariantImage(
     return product.images[0];
   }
 
-  return '/src/assets/images/marketplace_hero_banner_1791237117872.jpg';
+  return '/images/marketplace_hero_banner_1791237117872.jpg';
 }
 
 /**

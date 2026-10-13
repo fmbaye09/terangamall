@@ -22,6 +22,7 @@ import { useStore } from '../context/StoreContext';
 import { formatFCFA } from '../services/payment';
 import { ProductCard } from '../components/ui/ProductCard';
 import { SafeImage } from '../components/ui/SafeImage';
+import { cdnImageUrl } from '../utils/imageCdn';
 import {
   calculateVariantSavings,
   findMatchingVariant,
@@ -226,6 +227,8 @@ export const ProductPage: React.FC = () => {
             <SafeImage
               src={activeDisplayImage}
               alt={`${product.name} - ${selectedColor}`}
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              priority
               className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
             />
             {discountPct > 0 && (
@@ -264,6 +267,8 @@ export const ProductPage: React.FC = () => {
                     <SafeImage
                       src={img}
                       alt={`${product.name} vue ${idx + 1}`}
+                      sizes="96px"
+                      maxWidth={320}
                       className="w-full h-full object-cover"
                     />
                     {matchingCol && (
@@ -390,8 +395,10 @@ export const ProductPage: React.FC = () => {
                       {/* Visual thumbnail or color dot */}
                       {colPhoto ? (
                         <img
-                          src={colPhoto}
+                          src={cdnImageUrl(colPhoto, 160)}
                           alt={c.name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-7 h-7 rounded-lg object-cover border border-[#E5E5E5] shrink-0"
                         />
                       ) : (
@@ -809,8 +816,9 @@ export const ProductPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             <img
-              src={activeDisplayImage}
+              src={cdnImageUrl(activeDisplayImage, 1920, 85)}
               alt={product.name}
+              decoding="async"
               className="w-full h-auto max-h-[82vh] object-contain rounded-xl"
             />
           </div>

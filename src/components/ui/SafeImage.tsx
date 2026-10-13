@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Shirt } from 'lucide-react';
+import { cdnImageUrl, cdnSrcSet } from '../../utils/imageCdn';
 
 interface SafeImageProps {
   src: string;
   alt: string;
   className?: string;
   fallbackLabel?: string;
+  /** Largeur affichée de l'image (attribut `sizes`), ex. "(min-width: 1024px) 25vw, 50vw". */
+  sizes?: string;
+  /** Largeur maximale à générer, en pixels (ex. 160 pour une miniature). */
+  maxWidth?: number;
+  /** Image visible au premier affichage (hero, image principale) : chargée en priorité. */
+  priority?: boolean;
 }
 
 export const SafeImage: React.FC<SafeImageProps> = ({
@@ -13,10 +20,18 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   alt,
   className = '',
   fallbackLabel,
+  sizes = '100vw',
+  maxWidth = 1920,
+  priority = false,
 }) => {
-  const [hasError, setHasError] = useState(false);
+  // 0 = version optimisée via le CDN, 1 = image originale, 2 = échec définitif
+  const [attempt, setAttempt] = useState(0);
 
-  if (hasError || !src) {
+  useEffect(() => {
+    setAttempt(0);
+  }, [src]);
+
+  if (attempt >= 2 || !src) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-[#F7F7F5] text-[#777777] p-6 select-none ${className}`}
@@ -31,13 +46,20 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     );
   }
 
+  const useCdn = attempt === 0;
+  const srcSet = useCdn ? cdnSrcSet(src, maxWidth) : undefined;
+
   return (
     <img
-      src={src}
+      src={useCdn ? cdnImageUrl(src, Math.min(maxWidth, 960)) : src}
+      srcSet={srcSet}
+      sizes={srcSet ? sizes : undefined}
       alt={alt}
       referrerPolicy="no-referrer"
-      loading="lazy"
-      onError={() => setHasError(true)}
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
+      fetchPriority={priority ? 'high' : 'auto'}
+      onError={() => setAttempt((a) => a + 1)}
       className={className}
     />
   );
