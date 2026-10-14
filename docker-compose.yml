@@ -1,26 +1,51 @@
-version: '3.8'
-
 services:
-  terangamall:
+  # Version « production » : front compilé + API Express.
+  #   docker compose up --build   →  http://localhost:3000
+  app:
     build:
       context: .
-      dockerfile: Dockerfile
+      target: runner
+    image: terangamall:latest
     container_name: terangamall-app
     restart: unless-stopped
     ports:
-      # Port par défaut 3000 accessible via http://votre-serveur:3000
-      # Modifiable via variable d'environnement PORT (ex: PORT=80)
-      - "${PORT:-3000}:80"
+      - "${PORT:-3000}:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - NODE_ENV=production
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      NODE_ENV: production
+      PORT: 3000
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Version développement avec rechargement à chaud (code monté en volume).
+  #   docker compose --profile dev up dev   →  http://localhost:5173
+  dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      target: deps
+    image: terangamall:dev
+    container_name: terangamall-dev
+    command: npm run dev
+    ports:
+      - "${DEV_PORT:-5173}:3000"
+      - "24678:24678" # WebSocket HMR de Vite
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # Détection des modifications fiable sur les volumes Docker (macOS / Windows)
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+
+volumes:
+  node_modules:
