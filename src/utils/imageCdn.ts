@@ -7,7 +7,8 @@
 const RESPONSIVE_WIDTHS = [160, 320, 480, 640, 960, 1280, 1920];
 
 // Le CDN n'est disponible que sur Netlify (build de prod ou `netlify dev`).
-const CDN_ENABLED = import.meta.env.PROD;
+// Hors Netlify (ex. image Docker), le build passe VITE_IMAGE_CDN=false.
+const CDN_ENABLED = import.meta.env.PROD && import.meta.env.VITE_IMAGE_CDN !== 'false';
 
 /** Seules les images du site (chemins absolus locaux) passent par le CDN. */
 function isOptimizable(src: string): boolean {

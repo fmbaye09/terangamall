@@ -484,7 +484,29 @@ app.get('/api/paydunya/logs', (_req, res) => {
 // En production, servir les fichiers statiques de Vite compilés
 // En développement, monter Vite en middleware
 async function startServer() {
+  // Équivalents locaux des règles Netlify (netlify.toml / Image CDN), utiles
+  // quand le site tourne hors Netlify (Docker, serveur dédié).
+  app.get('/src/assets/images/*', (req, res) => {
+    res.redirect(301, `/images/${req.params[0]}`);
+  });
+  app.get('/.netlify/images', (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    if (!url.startsWith('/') || url.startsWith('//')) {
+      res.status(400).send('Invalid image url');
+      return;
+    }
+    res.redirect(302, url);
+  });
+
   if (process.env.NODE_ENV === 'production') {
+    app.use(
+      '/images',
+      express.static(path.join(__dirname, 'dist', 'images'), { maxAge: '7d' }),
+    );
+    app.use(
+      '/assets',
+      express.static(path.join(__dirname, 'dist', 'assets'), { maxAge: '1y', immutable: true }),
+    );
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
